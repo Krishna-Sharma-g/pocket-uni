@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm Ivory & Deep Charcoal Design System */
+    --ivory-bg: #FAF8F5;
+    --ivory-surface: #FFFFFF;
+    --ivory-subtle: #F4F0E8;
+    --charcoal-primary: #191B1F;
+    --charcoal-muted: #525862;
+    --charcoal-subtle: #717882;
+    --border-soft: #E5DFD5;
+    --border-subtle: #EFEBE4;
+    --accent-copper: #B86B43;
+    --accent-sage: #708275;
+
+    /* Legacy mapping for backward compatibility */
+    --ink-navy: #191B1F;
+    --slate-blue: #525862;
+    --muted-terracotta: #B86B43;
+    --warm-stone: #E5DFD5;
+    --paper: #FAF8F5;
+    --sage: #708275;
+  }
+
+  body {
+    background-color: #FAF8F5;
+    color: #191B1F;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #191B1F;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+
+  /* Subtle, restrained focus ring without neon glow */
+  *:focus-visible {
+    outline: 2px solid #191B1F;
+    outline-offset: 1px;
+  }
+}
+
+/* Minimalist, understated scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(25, 27, 31, 0.14);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(25, 27, 31, 0.26);
+}
+
+/* Subtly imperceptible Ken Burns camera zoom (1.0 to 1.02) */
+@keyframes kenburns {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-ken-burns {
+  animation: kenburns 22s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* Staggered entrance micro-interactions */
+@keyframes heroFadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-hero-title {
+  animation: heroFadeInUp 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-hero-subtitle {
+  animation: heroFadeInUp 500ms cubic-bezier(0.16, 1, 0.3, 1) 150ms both;
+}
+
+.animate-hero-tagline {
+  animation: heroFadeInUp 500ms cubic-bezier(0.16, 1, 0.3, 1) 250ms both;
+}
+
+.animate-hero-card {
+  animation: heroFadeInUp 550ms cubic-bezier(0.16, 1, 0.3, 1) 320ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ken-burns,
+  .animate-hero-title,
+  .animate-hero-subtitle,
+  .animate-hero-tagline,
+  .animate-hero-card {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* Card and button interactive micro-elevation */
+.hover-elevate {
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hover-elevate:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -2px rgba(25, 27, 31, 0.08);
+}
+
