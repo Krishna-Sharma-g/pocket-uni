@@ -20,6 +20,7 @@ import { realtimeClient } from '../services/realtimeClient';
 export type ActiveView =
   | 'landing'
   | 'chat'
+  | 'discover'
   | 'application_agent_chat'
   | 'applications_list'
   | 'application_detail'
@@ -1122,13 +1123,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     // Recalculate completeness score
-    let score = 30; // base for identity
-    if (updated.bio && updated.bio.length > 20) score += 15;
-    if (updated.skills && updated.skills.length >= 3) score += 15;
-    if (updated.lookingFor) score += 10;
-    if (updated.projects && updated.projects.length > 0) score += 15;
-    if (updated.githubUrl || updated.linkedinUrl) score += 10;
+    let score = 25; // base for identity
+    if ((updated.headline && updated.headline.length > 5) || (updated.bio && updated.bio.length > 10)) score += 15;
+    if (updated.primaryDomain) score += 10;
+    if (updated.skills && updated.skills.length >= 3) score += 20;
+    if (updated.lookingFor || (updated.lookingForRoles && updated.lookingForRoles.length > 0)) score += 10;
+    if (updated.githubUrl || updated.linkedinUrl || updated.portfolioUrl) score += 10;
     if (updated.resumeFileName) score += 5;
+    if (updated.achievements && updated.achievements.length > 5) score += 5;
 
     updated.completenessScore = Math.min(100, score);
 

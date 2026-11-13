@@ -4,6 +4,7 @@ import { LandingPage } from './components/LandingPage';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { ChatView } from './components/ChatView';
+import { DiscoverView } from './components/DiscoverView';
 import { ApplicationAgentChat } from './components/ApplicationAgentChat';
 import { ApplicationListView } from './components/ApplicationListView';
 import { ApplicationDetailView } from './components/ApplicationDetailView';
@@ -12,6 +13,7 @@ import { FacultyProfileView } from './components/FacultyProfileView';
 import { FacultyDirectoryView } from './components/FacultyDirectoryView';
 import { StudentPreviewModal } from './components/StudentPreviewModal';
 import { SuperAdminDashboardView } from './components/SuperAdminDashboardView';
+import { ProfileSetupWizard } from './components/profile/ProfileSetupWizard';
 
 const CAMPUS_IMAGES = [
   '/campus/mits-campus-1.jpg',
@@ -30,6 +32,19 @@ export const App: React.FC = () => {
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [bgIndex, setBgIndex] = useState(0);
+  const [showProfileWizard, setShowProfileWizard] = useState(false);
+
+  // Check if first-time student onboarding is needed
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'student') {
+      const isCompleted = localStorage.getItem(`pocketuni_onboarding_completed_${currentUser.id}`) === 'true';
+      if (!isCompleted) {
+        setShowProfileWizard(true);
+      }
+    } else {
+      setShowProfileWizard(false);
+    }
+  }, [currentUser]);
 
   // Rotate ambient campus background every 5 seconds with 1.5s crossfade
   useEffect(() => {
@@ -48,6 +63,8 @@ export const App: React.FC = () => {
     switch (activeView) {
       case 'chat':
         return <ChatView />;
+      case 'discover':
+        return <DiscoverView />;
       case 'application_agent_chat':
         return <ApplicationAgentChat />;
       case 'applications_list':
@@ -121,6 +138,14 @@ export const App: React.FC = () => {
           <StudentPreviewModal
             card={previewStudentCard}
             onClose={() => setPreviewStudentCard(null)}
+          />
+        )}
+
+        {/* First-Time Profile Setup Wizard Overlay */}
+        {showProfileWizard && (
+          <ProfileSetupWizard
+            isOpen={showProfileWizard}
+            onClose={() => setShowProfileWizard(false)}
           />
         )}
       </div>

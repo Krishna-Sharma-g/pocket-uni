@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Message, MessageSource, StudentMatchCard } from '../types';
+import { StudentCard } from './discover/StudentCard';
 
 export const ChatView: React.FC = () => {
   const {
@@ -202,59 +203,17 @@ export const ChatView: React.FC = () => {
                     {/* Discovery Profile Cards */}
                     {msg.profileCards && msg.profileCards.length > 0 && (
                       <div className="pt-2">
-                        <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-white/80 uppercase tracking-wider">
+                        <div className="flex items-center gap-2 mb-2.5 text-xs font-semibold text-white/80 uppercase tracking-wider">
                           <Users className="w-4 h-4 text-emerald-400" />
                           <span>Matched Student Profiles</span>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {msg.profileCards.map((card) => (
-                            <div
+                            <StudentCard
                               key={card.studentId}
-                              onClick={() => setPreviewStudentCard(card)}
-                              className="p-3.5 rounded-2xl bg-[#12161A]/85 border border-white/10 hover:border-white/20 hover:bg-[#161C22]/95 hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)] backdrop-blur-md transition-all cursor-pointer group text-left"
-                            >
-                              <div className="flex items-start gap-3">
-                                <img
-                                  src={card.pictureUrl}
-                                  alt={card.name}
-                                  className="w-11 h-11 rounded-xl object-cover border border-white/10 shadow-sm shrink-0"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center justify-between gap-1">
-                                    <h4 className="font-heading font-semibold text-xs text-[#FAFAFA] group-hover:text-emerald-300 transition-colors truncate">
-                                      {card.name}
-                                    </h4>
-                                    <span className="text-[10px] font-mono font-semibold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.2 rounded shrink-0">
-                                      Yr {card.year}
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] text-white/70 truncate">
-                                    {card.branch}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <p className="text-[11px] text-white/75 mt-2 line-clamp-2 leading-relaxed">
-                                {card.bio}
-                              </p>
-
-                              {/* Tags */}
-                              <div className="flex flex-wrap gap-1 mt-2.5">
-                                {card.matchedTags.slice(0, 3).map((tag, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/[0.05] border border-white/10 text-white/80"
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
-                                {card.openForHackathons && (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-950/60 text-emerald-300 border border-emerald-500/30">
-                                    Hackathons
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                              student={card}
+                              onViewProfile={() => setPreviewStudentCard(card)}
+                            />
                           ))}
                         </div>
                       </div>

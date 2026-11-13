@@ -19,15 +19,24 @@ export const INITIAL_STUDENTS: StudentWithUser[] = [
       rollNumber: '0901CS231001',
       branch: 'Computer Science & Engineering',
       yearOfStudy: 2,
-      graduationYear: 2027
+      graduationYear: 2027,
+      gender: 'Male',
+      semester: 4
     },
     profile: {
       studentId: 'usr-aarav',
+      headline: 'Fullstack Developer | React | Flutter | TypeScript',
+      primaryDomain: 'Web Development',
       bio: '2nd-year CSE student at MITS Gwalior. Passionate about building fast web apps and mobile interfaces. Active in hackathons and open-source tooling.',
       lookingFor: 'Teammates for Smart India Hackathon 2026 and AI hackathons (need backend & ML folks).',
+      lookingForRoles: ['Hackathon Team', 'Project Collaborator'],
       openForHackathons: true,
       openSourceContributor: true,
       competitiveProgramming: true,
+      isAvailable: true,
+      openToCollaboratingWith: ['Same Branch', 'Other Branches', 'Same Year', 'Seniors'],
+      collaborationMode: ['Both'],
+      professionalExperiences: ['Personal Projects', 'Hackathons', 'Open Source', 'Club Leadership'],
       competitiveHandles: {
         leetcode: 'aarav_mits',
         codeforces: 'aarav_codes',
@@ -107,15 +116,24 @@ export const INITIAL_STUDENTS: StudentWithUser[] = [
       rollNumber: '0901CS211045',
       branch: 'Computer Science & Engineering',
       yearOfStudy: 4,
-      graduationYear: 2025
+      graduationYear: 2025,
+      gender: 'Female',
+      semester: 7
     },
     profile: {
       studentId: 'usr-meera',
+      headline: 'AI / ML Researcher | Computer Vision | PyTorch',
+      primaryDomain: 'AI / ML',
       bio: 'Final-year CSE student focused on Deep Learning, Computer Vision, and Medical Image Analysis. Author of an IEEE student conference paper on retinal scan segmentation.',
       lookingFor: 'Research collaborators for an upcoming IEEE paper submission & ML engineers for joint projects.',
+      lookingForRoles: ['Research Partner', 'Project Collaborator'],
       openForHackathons: true,
       openSourceContributor: true,
       competitiveProgramming: false,
+      isAvailable: true,
+      openToCollaboratingWith: ['Same Branch', 'Other Branches', 'Anyone'],
+      collaborationMode: ['Online', 'Both'],
+      professionalExperiences: ['Research', 'Internship', 'Technical Blogs', 'Hackathons'],
       competitiveHandles: {
         leetcode: 'meerap_ai',
         github: 'meera-patel-ai'
@@ -186,15 +204,24 @@ export const INITIAL_STUDENTS: StudentWithUser[] = [
       rollNumber: '0901IT221088',
       branch: 'Information Technology',
       yearOfStudy: 3,
-      graduationYear: 2026
+      graduationYear: 2026,
+      gender: 'Male',
+      semester: 5
     },
     profile: {
       studentId: 'usr-rohan',
+      headline: 'Backend & Cloud Architect | Golang | Kubernetes',
+      primaryDomain: 'Cloud',
       bio: '3rd-year IT student. Systems and backend engineer. Love Golang, high-performance APIs, Docker, and distributed caching.',
       lookingFor: 'Hackathon team needing solid backend/cloud infra engineer; also looking for open-source mentors.',
+      lookingForRoles: ['Hackathon Team', 'Startup Co-founder'],
       openForHackathons: true,
       openSourceContributor: true,
       competitiveProgramming: true,
+      isAvailable: true,
+      openToCollaboratingWith: ['Same Branch', 'Other Branches', 'Same Year'],
+      collaborationMode: ['Both'],
+      professionalExperiences: ['Personal Projects', 'Hackathons', 'Open Source', 'Certifications'],
       competitiveHandles: {
         codeforces: 'rohan_cf_1780',
         leetcode: 'rohan_verma_99',
@@ -256,15 +283,24 @@ export const INITIAL_STUDENTS: StudentWithUser[] = [
       rollNumber: '0901AI231012',
       branch: 'Artificial Intelligence & Data Science',
       yearOfStudy: 2,
-      graduationYear: 2027
+      graduationYear: 2027,
+      gender: 'Female',
+      semester: 4
     },
     profile: {
       studentId: 'usr-ananya',
+      headline: 'GenAI & NLP Engineer | LangChain | FastAPI',
+      primaryDomain: 'AI / ML',
       bio: '2nd-year AI & Data Science student. GDSC Lead. Passionate about GenAI, LLM orchestration, and NLP for regional Indian languages.',
       lookingFor: 'Collaborators for AI agents and RAG applications for campus problems.',
+      lookingForRoles: ['Project Collaborator', 'Hackathon Team', 'Study Partner'],
       openForHackathons: true,
       openSourceContributor: false,
       competitiveProgramming: false,
+      isAvailable: true,
+      openToCollaboratingWith: ['Same Branch', 'Other Branches', 'Juniors', 'Anyone'],
+      collaborationMode: ['Online'],
+      professionalExperiences: ['Personal Projects', 'Club Leadership', 'Technical Blogs'],
       competitiveHandles: {
         github: 'ananya-deshmukh-ai'
       },
@@ -305,15 +341,24 @@ export const INITIAL_STUDENTS: StudentWithUser[] = [
       rollNumber: '0901EC221054',
       branch: 'Electronics & Communication Engineering',
       yearOfStudy: 3,
-      graduationYear: 2026
+      graduationYear: 2026,
+      gender: 'Female',
+      semester: 6
     },
     profile: {
       studentId: 'usr-priya',
+      headline: 'Autonomous Robotics & Embedded Systems | ROS 2',
+      primaryDomain: 'Robotics',
       bio: 'Robotics Club Lead at MITS. Embedded systems enthusiast, ROS 2 explorer, PCB designer. Built autonomous terrain rovers for e-Yantra.',
       lookingFor: 'Teammates for national robotics competitions (e-Yantra & Robocon) with C++ and ROS experience.',
+      lookingForRoles: ['Hackathon Team', 'Project Collaborator', 'Research Partner'],
       openForHackathons: true,
       openSourceContributor: true,
       competitiveProgramming: false,
+      isAvailable: true,
+      openToCollaboratingWith: ['Other Branches', 'Seniors', 'Anyone'],
+      collaborationMode: ['Offline', 'Both'],
+      professionalExperiences: ['Personal Projects', 'Hackathons', 'Club Leadership', 'Research'],
       competitiveHandles: {
         github: 'priyanair-robotics'
       },
@@ -354,15 +399,24 @@ export const INITIAL_STUDENTS: StudentWithUser[] = [
       rollNumber: '0901CS231078',
       branch: 'Computer Science & Engineering',
       yearOfStudy: 2,
-      graduationYear: 2027
+      graduationYear: 2027,
+      gender: 'Female',
+      semester: 3
     },
     profile: {
       studentId: 'usr-sneha',
+      headline: 'Product & UI/UX Designer | Figma | Frontend',
+      primaryDomain: 'UI / UX',
       bio: 'UI/UX Designer and Frontend developer. I obsess over clean typography, smooth 60fps micro-interactions, and accessible web experiences.',
       lookingFor: 'Design collaboration on student-led projects and hackathon teams needing product & UI design.',
+      lookingForRoles: ['Project Collaborator', 'Hackathon Team'],
       openForHackathons: true,
       openSourceContributor: false,
       competitiveProgramming: false,
+      isAvailable: true,
+      openToCollaboratingWith: ['Same Branch', 'Other Branches', 'Same Year', 'Seniors'],
+      collaborationMode: ['Online', 'Both'],
+      professionalExperiences: ['Personal Projects', 'Freelancing', 'Hackathons'],
       competitiveHandles: {
         github: 'snehagupta-design'
       },
@@ -388,6 +442,182 @@ export const INITIAL_STUDENTS: StudentWithUser[] = [
       profileVisible: true,
       completenessScore: 89,
       updatedAt: '2026-10-27T17:00:00Z'
+    }
+  },
+  {
+    user: {
+      id: 'usr-vikram',
+      googleSub: 'google-sub-vikram-007',
+      email: 'vikram.singh@mitsgwl.ac.in',
+      role: 'student',
+      fullName: 'Vikram Singhania',
+      pictureUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80',
+      isActive: true,
+      lastLoginAt: '2026-10-29T14:00:00Z',
+      rollNumber: '0901CS221092',
+      branch: 'Computer Science & Engineering',
+      yearOfStudy: 3,
+      graduationYear: 2026,
+      gender: 'Male',
+      semester: 6
+    },
+    profile: {
+      studentId: 'usr-vikram',
+      headline: 'Cybersecurity Specialist | CTFs & Ethical Hacking | Linux',
+      primaryDomain: 'Cybersecurity',
+      bio: 'Cybersecurity researcher and CTF player. Passionate about network penetration testing, web application vulnerabilities, and cryptography.',
+      lookingFor: 'Teammates for national CTF competitions and cybersecurity research projects.',
+      lookingForRoles: ['Hackathon Team', 'Study Partner', 'Research Partner'],
+      openForHackathons: true,
+      openSourceContributor: true,
+      competitiveProgramming: false,
+      isAvailable: true,
+      openToCollaboratingWith: ['Same Branch', 'Other Branches', 'Seniors'],
+      collaborationMode: ['Online', 'Both'],
+      professionalExperiences: ['Hackathons', 'Certifications', 'Personal Projects'],
+      competitiveHandles: {
+        github: 'vikram-sec'
+      },
+      githubUrl: 'https://github.com/vikram-sec',
+      linkedinUrl: 'https://linkedin.com/in/vikram-singh-sec',
+      portfolioUrl: '',
+      availabilityHoursPerWeek: 18,
+      availabilityNotes: 'Evenings and weekend hack sessions.',
+      preferredRoles: ['Security Analyst', 'Penetration Tester', 'DevSecOps'],
+      clubs: ['Coding Club MITS'],
+      skills: [
+        { id: 'sk-v1', name: 'Cybersecurity', proficiency: 'Advanced', category: 'Security' },
+        { id: 'sk-v2', name: 'Linux', proficiency: 'Advanced', category: 'OS' },
+        { id: 'sk-v3', name: 'Python', proficiency: 'Advanced', category: 'Language' },
+        { id: 'sk-v4', name: 'Network Security', proficiency: 'Intermediate', category: 'Security' }
+      ],
+      techStack: ['Kali Linux', 'Wireshark', 'Python', 'Bash', 'Docker'],
+      interests: ['Cybersecurity', 'Ethical Hacking', 'CTF', 'Cryptography'],
+      domains: ['Cybersecurity'],
+      projects: [],
+      experiences: [],
+      certifications: [],
+      profileVisible: true,
+      completenessScore: 87,
+      updatedAt: '2026-10-29T14:00:00Z'
+    }
+  },
+  {
+    user: {
+      id: 'usr-devansh',
+      googleSub: 'google-sub-devansh-008',
+      email: 'devansh.joshi@mitsgwl.ac.in',
+      role: 'student',
+      fullName: 'Devansh Joshi',
+      pictureUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80',
+      isActive: true,
+      lastLoginAt: '2026-10-29T15:30:00Z',
+      rollNumber: '0901IT231034',
+      branch: 'Information Technology',
+      yearOfStudy: 2,
+      graduationYear: 2027,
+      gender: 'Male',
+      semester: 4
+    },
+    profile: {
+      studentId: 'usr-devansh',
+      headline: 'Competitive Programmer | LeetCode Guardian | C++',
+      primaryDomain: 'Competitive Programming',
+      bio: 'Algorithms nerd and competitive programming fanatic. 2000+ rating on LeetCode, Candidate Master on Codeforces. Love dynamic programming and graph theory.',
+      lookingFor: 'ICPC teammates and hackathon teams needing rapid algorithmic problem solvers.',
+      lookingForRoles: ['Hackathon Team', 'Study Partner', 'Mentor'],
+      openForHackathons: true,
+      openSourceContributor: false,
+      competitiveProgramming: true,
+      isAvailable: true,
+      openToCollaboratingWith: ['Same Branch', 'Other Branches', 'Same Year', 'Anyone'],
+      collaborationMode: ['Both'],
+      professionalExperiences: ['Competitive Programming', 'Personal Projects'],
+      competitiveHandles: {
+        leetcode: 'devansh_cp',
+        codeforces: 'devansh_1900',
+        github: 'devansh-algorithms'
+      },
+      githubUrl: 'https://github.com/devansh-algorithms',
+      linkedinUrl: 'https://linkedin.com/in/devansh-joshi-cp',
+      portfolioUrl: '',
+      availabilityHoursPerWeek: 20,
+      availabilityNotes: 'Daily contest hours and late evenings.',
+      preferredRoles: ['Algorithm Engineer', 'Software Engineer', 'Backend Developer'],
+      clubs: ['Coding Club MITS'],
+      skills: [
+        { id: 'sk-d1', name: 'C++', proficiency: 'Expert', category: 'Language' },
+        { id: 'sk-d2', name: 'Data Structures', proficiency: 'Expert', category: 'CS' },
+        { id: 'sk-d3', name: 'Algorithms', proficiency: 'Expert', category: 'CS' },
+        { id: 'sk-d4', name: 'Python', proficiency: 'Intermediate', category: 'Language' }
+      ],
+      techStack: ['C++', 'STL', 'Algorithms', 'Python'],
+      interests: ['Competitive Programming', 'DSA', 'Discrete Mathematics'],
+      domains: ['Competitive Programming'],
+      projects: [],
+      experiences: [],
+      certifications: [],
+      profileVisible: true,
+      completenessScore: 91,
+      updatedAt: '2026-10-29T15:30:00Z'
+    }
+  },
+  {
+    user: {
+      id: 'usr-riya',
+      googleSub: 'google-sub-riya-009',
+      email: 'riya.sen@mitsgwl.ac.in',
+      role: 'student',
+      fullName: 'Riya Sen',
+      pictureUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+      isActive: true,
+      lastLoginAt: '2026-10-29T16:45:00Z',
+      rollNumber: '0901AI231056',
+      branch: 'Artificial Intelligence & Data Science',
+      yearOfStudy: 2,
+      graduationYear: 2027,
+      gender: 'Female',
+      semester: 4
+    },
+    profile: {
+      studentId: 'usr-riya',
+      headline: 'Data Scientist & Analytics Specialist | Pandas | SQL',
+      primaryDomain: 'Data Science',
+      bio: 'Passionate about extracting actionable stories from raw data. Experienced with exploratory data analysis, feature engineering, and statistical modeling.',
+      lookingFor: 'Project collaboration on campus analytics and data-driven product ideas.',
+      lookingForRoles: ['Project Collaborator', 'Research Partner', 'Startup Co-founder'],
+      openForHackathons: true,
+      openSourceContributor: true,
+      competitiveProgramming: false,
+      isAvailable: true,
+      openToCollaboratingWith: ['Same Branch', 'Other Branches', 'Same Year', 'Seniors'],
+      collaborationMode: ['Both'],
+      professionalExperiences: ['Personal Projects', 'Internship', 'Research'],
+      competitiveHandles: {
+        github: 'riya-sen-ds'
+      },
+      githubUrl: 'https://github.com/riya-sen-ds',
+      linkedinUrl: 'https://linkedin.com/in/riya-sen-analytics',
+      portfolioUrl: '',
+      availabilityHoursPerWeek: 15,
+      availabilityNotes: 'Weekdays after 3 PM.',
+      preferredRoles: ['Data Scientist', 'Data Analyst', 'ML Engineer'],
+      clubs: ['GDSC MITS'],
+      skills: [
+        { id: 'sk-rs1', name: 'Python', proficiency: 'Advanced', category: 'Language' },
+        { id: 'sk-rs2', name: 'Pandas', proficiency: 'Advanced', category: 'Data' },
+        { id: 'sk-rs3', name: 'SQL', proficiency: 'Advanced', category: 'Database' },
+        { id: 'sk-rs4', name: 'Scikit-learn', proficiency: 'Intermediate', category: 'ML' }
+      ],
+      techStack: ['Python', 'SQL', 'Pandas', 'Tableau', 'Scikit-learn', 'Jupyter'],
+      interests: ['Data Science', 'Machine Learning', 'Big Data', 'Analytics'],
+      domains: ['Data Science', 'AI/ML'],
+      projects: [],
+      experiences: [],
+      certifications: [],
+      profileVisible: true,
+      completenessScore: 86,
+      updatedAt: '2026-10-29T16:45:00Z'
     }
   }
 ];

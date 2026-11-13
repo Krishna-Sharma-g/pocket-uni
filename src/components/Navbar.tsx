@@ -25,6 +25,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenMobileSidebar }) => {
     switch (activeView) {
       case 'chat':
         return 'College Assistant';
+      case 'discover':
+        return 'Discover Teammates';
       case 'application_agent_chat':
         return 'Application Agent';
       case 'applications_list':

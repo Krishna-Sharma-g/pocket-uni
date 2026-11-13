@@ -21,6 +21,7 @@ export interface User {
   academicYear?: string;
   yearOfStudy?: number;
   graduationYear?: number;
+  gender?: string;
   // Faculty specific
   facultyIdentifier?: string;
   departmentId?: string;
@@ -65,7 +66,7 @@ export interface RosterSyncJob {
   completed_at?: string;
 }
 
-export type SkillProficiency = 'Beginner' | 'Intermediate' | 'Advanced';
+export type SkillProficiency = 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
 
 export interface StudentSkill {
   id: string;
@@ -109,8 +110,12 @@ export interface CompetitiveHandles {
 
 export interface StudentProfile {
   studentId: string;
+  headline?: string;
   bio: string;
+  aboutMe?: string;
+  primaryDomain?: string;
   lookingFor: string;
+  lookingForRoles?: string[];
   openForHackathons: boolean;
   openSourceContributor: boolean;
   competitiveProgramming: boolean;
@@ -121,18 +126,24 @@ export interface StudentProfile {
   resumeFileName?: string;
   resumeFileSize?: string;
   resumeUploadedAt?: string;
+  achievements?: string;
   availabilityHoursPerWeek: number;
   availabilityNotes: string;
+  isAvailable?: boolean;
   preferredRoles: string[];
   clubs: string[];
   skills: StudentSkill[];
   techStack: string[];
   interests: string[];
   domains: string[];
+  professionalExperiences?: string[];
+  openToCollaboratingWith?: string[];
+  collaborationMode?: string[];
   projects: StudentProject[];
   experiences: StudentExperience[];
   certifications: StudentCertification[];
   profileVisible: boolean;
+  profileCompleted?: boolean;
   completenessScore: number;
   updatedAt: string;
 }
@@ -195,6 +206,11 @@ export interface StudentMatchCard {
   preferredRoles: string[];
   githubUrl?: string;
   linkedinUrl?: string;
+  headline?: string;
+  primaryDomain?: string;
+  matchPercentage?: number;
+  semester?: number;
+  gender?: string;
 }
 
 export interface Message {

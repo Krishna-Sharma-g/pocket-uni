@@ -16,7 +16,9 @@ import {
   LogOut,
   User,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Compass,
+  Star
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ds } from '../styles/designSystem';
@@ -190,48 +192,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
 
         {/* Main Nav Items */}
         <div className="px-3 pb-2 space-y-1">
-          {/* Super Admin Portal (Admin Only) */}
-          {currentUser?.role === 'super_admin' && (
-            <button
-              onClick={() => {
-                setActiveView('super_admin_dashboard');
-                setMobileOpen(false);
-              }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-                activeView === 'super_admin_dashboard'
-                  ? 'bg-white/12 text-white font-semibold border border-white/15 shadow-sm'
-                  : 'text-[rgba(255,255,255,0.70)] hover:text-white hover:bg-white/[0.06]'
-              }`}
-              title="Super Admin Portal"
-            >
-              <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
-              {!sidebarCollapsed && (
-                <div className="flex-1 flex items-center justify-between text-left">
-                  <span>Super Admin Portal</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 font-mono font-bold">
-                    Admin
-                  </span>
-                </div>
-              )}
-            </button>
-          )}
-
-          {/* Applications Navigation */}
+          {/* Discover Navigation */}
           <button
-            onClick={handleGoToApplications}
+            onClick={() => {
+              setActiveView('discover');
+              setMobileOpen(false);
+            }}
             className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-              activeView === 'applications_list' || activeView === 'application_detail'
+              activeView === 'discover'
                 ? 'bg-white/12 text-white font-semibold border border-white/15 shadow-sm'
                 : 'text-[rgba(255,255,255,0.70)] hover:text-white hover:bg-white/[0.06]'
             }`}
-            title="Applications"
+            title="Discover"
           >
-            <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+            <Compass className="w-4 h-4 text-emerald-400 shrink-0" />
             {!sidebarCollapsed && (
               <div className="flex-1 flex items-center justify-between text-left">
-                <span>{currentUser?.role === 'faculty' ? 'Faculty Inbox' : 'Applications'}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-white/80 border border-white/10 font-mono font-medium">
-                  {currentUser?.role === 'faculty' ? 'Inbox' : 'Queue'}
+                <span>Discover</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 font-mono font-medium">
+                  AI
                 </span>
               </div>
             )}
@@ -260,6 +239,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
             </button>
           )}
 
+          {/* Applications Navigation */}
+          <button
+            onClick={handleGoToApplications}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+              activeView === 'applications_list' || activeView === 'application_detail'
+                ? 'bg-white/12 text-white font-semibold border border-white/15 shadow-sm'
+                : 'text-[rgba(255,255,255,0.70)] hover:text-white hover:bg-white/[0.06]'
+            }`}
+            title="Applications"
+          >
+            <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+            {!sidebarCollapsed && (
+              <div className="flex-1 flex items-center justify-between text-left">
+                <span>{currentUser?.role === 'faculty' ? 'Faculty Inbox' : 'Applications'}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-white/80 border border-white/10 font-mono font-medium">
+                  {currentUser?.role === 'faculty' ? 'Inbox' : 'Queue'}
+                </span>
+              </div>
+            )}
+          </button>
+
           {/* Faculty Directory */}
           <button
             onClick={() => {
@@ -276,6 +276,32 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
             <GraduationCap className="w-4 h-4 text-emerald-400 shrink-0" />
             {!sidebarCollapsed && <span>Faculty Directory</span>}
           </button>
+
+          {/* Super Admin Portal (Admin Only) */}
+          {currentUser?.role === 'super_admin' && (
+            <button
+              onClick={() => {
+                setActiveView('super_admin_dashboard');
+                setMobileOpen(false);
+              }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                activeView === 'super_admin_dashboard'
+                  ? 'bg-white/12 text-white font-semibold border border-white/15 shadow-sm'
+                  : 'text-[rgba(255,255,255,0.70)] hover:text-white hover:bg-white/[0.06]'
+              }`}
+              title="Super Admin Portal"
+            >
+              <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
+              {!sidebarCollapsed && (
+                <div className="flex-1 flex items-center justify-between text-left">
+                  <span>Super Admin Portal</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 font-mono font-bold">
+                    Admin
+                  </span>
+                </div>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Recent Chats Section */}
