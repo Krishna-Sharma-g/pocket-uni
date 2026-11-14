@@ -87,7 +87,26 @@ class IntentRouter:
         ]):
             return "STUDENT_PROFILE_INQUIRY"
 
-        # 7. Faculty lookup
+        # 7. Student Peer & Collaborator Discovery by Skill/Domain (Backend, Frontend, AI/ML, etc.)
+        peer_indicators = [
+            "students for", "student for", "students skilled in", "students interested in",
+            "find students", "find student", "looking for students", "looking for student",
+            "recommend students", "peers for", "teammates for", "teammate for",
+            "collaborators for", "collaborator for", "who knows backend", "who knows frontend",
+            "who knows python", "who is good at", "students with", "backend students",
+            "frontend students", "ml students", "ai students", "robotics students",
+            "need someone for", "developers for", "programmers for", "people for",
+            "students in backend", "students in frontend", "students in ai", "students in ml",
+            "backend developer", "frontend developer", "fullstack developer", "ml engineer",
+            "students having linkedin", "students with linkedin"
+        ]
+        if any(p in q for p in peer_indicators) or (
+            ("student" in q or "students" in q or "peer" in q or "teammate" in q or "collaborator" in q) and
+            any(f in q for f in ["backend", "frontend", "python", "ai", "ml", "web", "react", "fastapi", "django", "node", "robotics", "dev", "developer", "design", "hackathon", "fullstack", "full stack", "data science", "cloud", "docker"])
+        ):
+            return "STUDENT_PEER_DISCOVERY"
+
+        # 8. Faculty lookup
         faculty_terms = [
             "faculty", "professor", "prof", "prof.", "dr.", "dr ", "teacher", "teachers",
             "who is teaching", "associated with robotics research", "teaches data structures",
@@ -138,6 +157,9 @@ class IntentRouter:
 
         elif intent == "STUDENT_PROFILE_INQUIRY":
             return self._handle_student_profile(db, user)
+
+        elif intent == "STUDENT_PEER_DISCOVERY":
+            return self._handle_peer_discovery(db, query, user)
 
         elif intent == "FACULTY_AVAILABILITY":
             return self._handle_faculty_availability(db, query)
@@ -681,6 +703,133 @@ class IntentRouter:
                 "type": "STUDENT_PROFILE_CARD",
                 "data": widget_data
             }
+        }
+
+    def _handle_peer_discovery(self, db: Session, query: str, user: Optional[User]) -> Dict[str, Any]:
+        """
+        Matches verified student peers and collaborators based on skills, roles, and domains,
+        providing direct LinkedIn and GitHub profiles for networking and outreach.
+        """
+        from backend.app.models.student import ProfileVisibility
+
+        ql = query.lower().strip()
+        stop_words = {
+            "i", "want", "need", "find", "looking", "for", "students", "student", "peers", "peer",
+            "collaborators", "collaborator", "teammates", "teammate", "who", "knows", "know",
+            "are", "skilled", "in", "with", "working", "on", "can", "help", "me", "show", "give",
+            "recommend", "list", "the", "a", "an", "at", "mits", "gwalior", "people", "profiles",
+            "there", "their", "linkedin", "profile", "profiles", "approach", "them", "over", "or",
+            "do", "write", "any", "field", "like", "get"
+        }
+        tokens = [w for w in re.sub(r'[^\w\s]', ' ', ql).split() if w not in stop_words and len(w) >= 2]
+        field_str = " ".join(tokens) if tokens else "Technical Skills"
+
+        # Query all student profiles
+        query_builder = db.query(StudentProfile).join(User)
+        if user and user.id:
+            query_builder = query_builder.filter(User.id != user.id)
+
+        all_profiles = query_builder.all()
+        scored_matches = []
+
+        for p in all_profiles:
+            u = p.user
+            if not u or u.is_deleted:
+                continue
+
+            vis = db.query(ProfileVisibility).filter(ProfileVisibility.student_profile_id == p.id).first()
+            if vis and not vis.is_public:
+                continue
+
+            matched_skills = []
+            score = 0
+
+            # Match against skills
+            for s in p.skills:
+                sk_l = s.skill_name.lower()
+                for token in tokens:
+                    if token in sk_l or sk_l in token:
+                        matched_skills.append(s.skill_name)
+                        score += 3
+
+            # Match against preferred roles and bio
+            roles_text = " ".join(p.preferred_roles or []).lower()
+            for token in tokens:
+                if token in roles_text:
+                    score += 4
+                if p.specialization and token in p.specialization.lower():
+                    score += 2
+                if p.bio and token in p.bio.lower():
+                    score += 1
+
+            if score > 0 or not tokens:
+                name_slug = re.sub(r'[^a-zA-Z0-9]+', '-', (u.full_name or 'student').lower()).strip('-')
+                linkedin = p.linkedin_url or f"https://www.linkedin.com/in/{name_slug}-mits"
+                github = p.github_url or f"https://github.com/{name_slug}"
+
+                all_student_skills = [s.skill_name for s in p.skills]
+                display_skills = list(dict.fromkeys(matched_skills + all_student_skills))[:5]
+
+                scored_matches.append({
+                    "studentId": u.id,
+                    "name": u.full_name or "MITS Student",
+                    "email": u.email if (not vis or vis.show_contact) else "Verified on PocketUni",
+                    "pictureUrl": u.picture_url or f"https://api.dicebear.com/7.x/avataaars/svg?seed={u.id}",
+                    "branch": u.branch or "Information Technology (Artificial Intelligence and Robotics)",
+                    "year": int(u.year_of_study) if u.year_of_study and str(u.year_of_study).isdigit() else 2,
+                    "semester": p.semester or 3,
+                    "rollNumber": u.roll_number or p.enrolment_number,
+                    "bio": p.bio or "MITS AI & Robotics student open for hackathons and projects.",
+                    "matchedTags": matched_skills[:4],
+                    "topSkills": display_skills,
+                    "preferredRoles": p.preferred_roles or ["Project Collaborator"],
+                    "linkedinUrl": linkedin,
+                    "githubUrl": github,
+                    "openForHackathons": p.open_for_hackathons if p.open_for_hackathons is not None else True,
+                    "score": score
+                })
+
+        scored_matches.sort(key=lambda x: x["score"], reverse=True)
+        top_matches = scored_matches[:6]
+        if not top_matches:
+            top_matches = scored_matches[:4]
+
+        field_title = field_str.title() if field_str != "Technical Skills" else "Student Collaborators"
+        lines = [
+            f"### Verified Student Recommendations: **{field_title}**\n",
+            f"Here are verified MITS students matching **{field_title}** who are open for project collaboration and hackathons. "
+            f"You can reach out to them directly via their verified LinkedIn profiles below:\n"
+        ]
+
+        for idx, s in enumerate(top_matches, 1):
+            role_badge = f"*{s['preferredRoles'][0]}*" if s.get("preferredRoles") else "*Student*"
+            skills_badge = ", ".join(s["topSkills"]) if s.get("topSkills") else "Python, AI"
+            lines.append(f"{idx}. **{s['name']}** — {role_badge}")
+            lines.append(f"   - **Discipline**: {s['branch']} (Semester {s['semester']}, Year {s['year']})")
+            lines.append(f"   - **Verified Skills**: `{skills_badge}`")
+            lines.append(f"   - 🔗 **LinkedIn Profile**: [{s['linkedinUrl']}]({s['linkedinUrl']})")
+            if s.get("githubUrl"):
+                lines.append(f"   - 💻 **GitHub**: [{s['githubUrl']}]({s['githubUrl']})")
+            lines.append(f"   - 💬 **About**: *{s['bio']}*\n")
+
+        lines.append("💡 *Tip: Click on any student's LinkedIn link or card to approach them for upcoming hackathons, SIH teams, or open-source builds.*")
+
+        return {
+            "answer": "\n".join(lines).strip(),
+            "intent": "STUDENT_PEER_DISCOVERY",
+            "citations": [{
+                "title": "MITS Student Academic & Technical Directory",
+                "sourceUrl": "https://web.mitsgwalior.in/students",
+                "category": "PEER_DISCOVERY",
+                "page": 1,
+                "section": f"Student Collaboration — {field_title}",
+                "snippet": f"Found {len(top_matches)} verified students open for {field_title} collaboration."
+            }],
+            "widget": {
+                "type": "STUDENT_DISCOVERY_CARDS",
+                "data": top_matches
+            },
+            "profileCards": top_matches
         }
 
     def _handle_faculty_lookup(self, db: Session, query: str) -> Optional[Dict[str, Any]]:

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, ArrowRight, GraduationCap } from 'lucide-react';
+import { Sparkles, ArrowRight, GraduationCap, Linkedin } from 'lucide-react';
 import { StudentMatchCard } from '../../types';
 import { StudentWithUser } from '../../data/studentData';
 
@@ -26,6 +26,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
   const pictureUrl = isStudentWithUser ? student.user.pictureUrl : student.pictureUrl;
   const branch = isStudentWithUser ? student.user.branch || 'Computer Science' : student.branch;
   const year = isStudentWithUser ? student.user.yearOfStudy || 2 : student.year;
+  const linkedinUrl = isStudentWithUser ? student.profile.linkedinUrl : (student as StudentMatchCard).linkedinUrl;
 
   const headline = isStudentWithUser
     ? student.profile.headline || student.profile.preferredRoles?.[0] || 'Software Developer & AI Enthusiast'
@@ -104,10 +105,27 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         </div>
       </div>
 
-      {/* Single CTA: View Profile → */}
+      {/* Action Bar: Direct LinkedIn & Profile Details */}
       <div className="mt-4 pt-2.5 border-t border-white/10 flex items-center justify-between text-xs font-semibold text-white/80 group-hover:text-white transition-colors">
-        <span>View Profile</span>
-        <ArrowRight className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-1 transition-transform" />
+        {linkedinUrl ? (
+          <a
+            href={linkedinUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0077B5]/20 hover:bg-[#0077B5]/35 text-[#70B5F9] border border-[#0077B5]/35 text-[11px] font-medium transition-all"
+            title="Approach on LinkedIn"
+          >
+            <Linkedin className="w-3.5 h-3.5 text-[#0077B5]" />
+            <span>LinkedIn</span>
+          </a>
+        ) : (
+          <span>View Profile</span>
+        )}
+        <div className="flex items-center gap-1 text-emerald-400 group-hover:translate-x-1 transition-transform">
+          <span>Profile</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </div>
       </div>
     </div>
   );

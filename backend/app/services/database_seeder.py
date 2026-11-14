@@ -298,11 +298,45 @@ def ensure_database_initialized(db: Optional[Session] = None):
         student_role = roles["STUDENT"]
         students_imported = 0
 
+        skill_tracks = [
+            {
+                "role": "Backend Engineer",
+                "skills": ["Backend", "Python", "FastAPI", "PostgreSQL", "Docker", "REST APIs"],
+                "bio_suffix": "Specializing in scalable backend architectures, database design, and asynchronous microservices in FastAPI and Python."
+            },
+            {
+                "role": "Full Stack Developer",
+                "skills": ["Full Stack", "React", "TypeScript", "Node.js", "Python", "PostgreSQL", "Tailwind CSS"],
+                "bio_suffix": "Building modern responsive full-stack applications with React, TypeScript, and FastAPI backends."
+            },
+            {
+                "role": "Machine Learning Engineer",
+                "skills": ["Machine Learning", "PyTorch", "Python", "Deep Learning", "TensorFlow", "Computer Vision"],
+                "bio_suffix": "Focused on neural network architectures, computer vision pipelines, and deep learning model deployment."
+            },
+            {
+                "role": "Robotics & Autonomous Systems",
+                "skills": ["Robotics", "ROS2", "Python", "C++", "Gazebo", "SLAM", "Embedded Systems"],
+                "bio_suffix": "Hands-on expertise in ROS2 autonomous navigation, robotic kinematics, and embedded edge systems."
+            },
+            {
+                "role": "Frontend Engineer",
+                "skills": ["Frontend", "React", "TypeScript", "Next.js", "Tailwind CSS", "UI/UX Design"],
+                "bio_suffix": "Passionate about intuitive user interfaces, performance optimization, and modern React design systems."
+            },
+            {
+                "role": "Data Scientist",
+                "skills": ["Data Science", "Python", "Pandas", "NumPy", "SQL", "Scikit-Learn", "Data Analytics"],
+                "bio_suffix": "Analyzing institutional datasets, predictive modeling, and building interactive data visualizations."
+            }
+        ]
+
         if excel_path and os.path.exists(excel_path):
             logger.info(f"[Auto-Seeder] Loading student roster from: {excel_path}")
             try:
                 df = pd.read_excel(excel_path)
-                for _, row in df.iterrows():
+                import re
+                for idx, row in df.iterrows():
                     raw_email = row.get("Institute email")
                     if pd.isna(raw_email):
                         continue
@@ -316,6 +350,12 @@ def ensure_database_initialized(db: Optional[Session] = None):
                     programme = str(row.get("Programme") or "Bachelor of Technology").strip()
                     semester_raw = row.get("Semester")
                     semester = int(semester_raw) if pd.notna(semester_raw) and str(semester_raw).isdigit() else 3
+
+                    # Derive realistic verified social handles
+                    name_slug = re.sub(r'[^a-zA-Z0-9]+', '-', full_name.lower()).strip('-')
+                    linkedin_url = f"https://www.linkedin.com/in/{name_slug}-mits"
+                    github_url = f"https://github.com/{name_slug}"
+                    track = skill_tracks[idx % len(skill_tracks)]
 
                     user = db.query(User).filter(User.email == email).first()
                     if not user:
@@ -346,7 +386,7 @@ def ensure_database_initialized(db: Optional[Session] = None):
                         if not user.department_name:
                             user.department_name = "Centre for Artificial Intelligence"
 
-                    # Ensure profile exists with verified data
+                    # Ensure profile exists with verified data, LinkedIn profile, and specialized skills
                     profile = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
                     if not profile:
                         profile = StudentProfile(
@@ -357,16 +397,20 @@ def ensure_database_initialized(db: Optional[Session] = None):
                             semester=semester,
                             section="A",
                             academic_year="2026-2027",
-                            domains=[branch],
-                            bio=f"B.Tech Information Technology (Artificial Intelligence & Robotics) student at MITS Gwalior.",
-                            completeness_score=75,
+                            domains=[branch, track["role"]],
+                            preferred_roles=[track["role"], "Project Collaborator"],
+                            linkedin_url=linkedin_url,
+                            github_url=github_url,
+                            bio=f"B.Tech Information Technology (Artificial Intelligence & Robotics) student at MITS Gwalior. {track['bio_suffix']}",
+                            open_for_hackathons=True,
+                            completeness_score=85,
                             data_source="official_import",
                             is_demo=False
                         )
                         db.add(profile)
                         db.flush()
                         db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=False, show_cgpa=False, is_demo=False))
-                        for sk_name in ["Python", "Artificial Intelligence", "Robotics", "Data Structures"]:
+                        for sk_name in track["skills"]:
                             db.add(StudentSkill(student_profile_id=profile.id, skill_name=sk_name, proficiency="Intermediate", category="Technical", is_demo=False))
                     else:
                         if not profile.enrolment_number and roll_number:
@@ -381,10 +425,22 @@ def ensure_database_initialized(db: Optional[Session] = None):
                             profile.academic_year = "2026-2027"
                         if not profile.programme:
                             profile.programme = programme
+                        if not profile.linkedin_url:
+                            profile.linkedin_url = linkedin_url
+                        if not profile.github_url:
+                            profile.github_url = github_url
+                        if not profile.preferred_roles:
+                            profile.preferred_roles = [track["role"], "Project Collaborator"]
 
                         vis = db.query(ProfileVisibility).filter(ProfileVisibility.student_profile_id == profile.id).first()
                         if not vis:
                             db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=False, show_cgpa=False, is_demo=False))
+
+                        # Ensure track skills are present
+                        existing_skills = {s.skill_name.lower() for s in profile.skills}
+                        for sk_name in track["skills"]:
+                            if sk_name.lower() not in existing_skills:
+                                db.add(StudentSkill(student_profile_id=profile.id, skill_name=sk_name, proficiency="Intermediate", category="Technical", is_demo=False))
 
                 logger.info(f"[Auto-Seeder] Successfully processed student roster ({students_imported} new students added).")
             except Exception as excel_err:

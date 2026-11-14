@@ -238,8 +238,9 @@ def send_message(
         conversation_id=conv.id,
         role="assistant",
         content=rag_result["answer"],
-        content_type="text",
-        sources=rag_result["citations"]
+        content_type="profile_cards" if rag_result.get("profileCards") else "text",
+        sources=rag_result["citations"],
+        profile_cards=rag_result.get("profileCards") or []
     )
     db.add(assistant_msg)
 
@@ -264,6 +265,7 @@ def send_message(
             "content": assistant_msg.content,
             "sources": assistant_msg.sources,
             "widget": rag_result.get("widget"),
+            "profileCards": assistant_msg.profile_cards,
             "createdAt": assistant_msg.created_at.isoformat()
         }
     }
@@ -333,8 +335,9 @@ async def stream_message(
                 conversation_id=conv.id,
                 role="assistant",
                 content=full_text,
-                content_type="text",
-                sources=citations
+                content_type="profile_cards" if intent_res.get("profileCards") else "text",
+                sources=citations,
+                profile_cards=intent_res.get("profileCards") or []
             )
             db.add(assistant_msg)
             conv.last_message_at = datetime.now(timezone.utc)
