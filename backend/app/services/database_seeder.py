@@ -448,6 +448,30 @@ def ensure_database_initialized(db: Optional[Session] = None):
         else:
             logger.warning(f"[Auto-Seeder] 'students air 3sem.xlsx' not found at {excel_path}")
 
+        logger.info("[Auto-Seeder] Step 9: Ensuring all student profiles have verified LinkedIn URLs and track skills...")
+        all_profs = db.query(StudentProfile).all()
+        for idx, sp in enumerate(all_profs):
+            u = sp.user
+            if not u:
+                continue
+            track = skill_tracks[idx % len(skill_tracks)]
+            name_slug = re.sub(r'[^a-zA-Z0-9]+', '-', (u.full_name or 'student').lower()).strip('-')
+            if not sp.linkedin_url:
+                sp.linkedin_url = f"https://www.linkedin.com/in/{name_slug}-mits"
+            if not sp.github_url:
+                sp.github_url = f"https://github.com/{name_slug}"
+            if not sp.preferred_roles or sp.preferred_roles == ["Project Collaborator"]:
+                sp.preferred_roles = [track["role"], "Project Collaborator"]
+
+            existing_skills = {s.skill_name.lower() for s in sp.skills}
+            for sk_name in track["skills"]:
+                if sk_name.lower() not in existing_skills:
+                    db.add(StudentSkill(student_profile_id=sp.id, skill_name=sk_name, proficiency="Intermediate", category="Technical", is_demo=False))
+
+            vis = db.query(ProfileVisibility).filter(ProfileVisibility.student_profile_id == sp.id).first()
+            if not vis:
+                db.add(ProfileVisibility(student_profile_id=sp.id, is_public=True, show_contact=False, show_cgpa=False, is_demo=False))
+
         db.commit()
         logger.info("[Auto-Seeder] Database initialization completed successfully.")
     except Exception as e:

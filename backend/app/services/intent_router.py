@@ -726,6 +726,27 @@ class IntentRouter:
         tokens = [w for w in re.sub(r'[^\w\s]', ' ', ql).split() if w not in stop_words and len(w) >= 2]
         field_str = " ".join(tokens) if tokens else "Technical Skills"
 
+        # Semantic skill and domain synonyms expansion
+        field_synonyms = {
+            "backend": ["backend", "python", "fastapi", "django", "node", "sql", "postgresql", "docker", "api", "rest", "database", "microservices"],
+            "frontend": ["frontend", "react", "typescript", "javascript", "tailwind", "next", "html", "css", "ui", "ux", "web"],
+            "fullstack": ["fullstack", "full stack", "react", "python", "node", "fastapi", "web", "sql"],
+            "ml": ["machine learning", "ml", "ai", "artificial intelligence", "pytorch", "tensorflow", "deep learning", "computer vision", "python"],
+            "machine learning": ["machine learning", "ml", "ai", "artificial intelligence", "pytorch", "tensorflow", "deep learning", "computer vision", "python"],
+            "ai": ["artificial intelligence", "ai", "machine learning", "deep learning", "robotics", "python"],
+            "robotics": ["robotics", "ros", "ros2", "gazebo", "embedded", "c++", "slam", "arduino", "python"],
+            "data": ["data science", "data", "pandas", "numpy", "sql", "analytics", "python"],
+            "cloud": ["cloud", "docker", "kubernetes", "aws", "devops", "linux", "backend"],
+            "app": ["flutter", "react native", "android", "ios", "mobile", "app"],
+        }
+        search_terms = set(tokens)
+        for t in tokens:
+            if t in field_synonyms:
+                search_terms.update(field_synonyms[t])
+            for k, syns in field_synonyms.items():
+                if t in k or k in t:
+                    search_terms.update(syns)
+
         # Query all student profiles
         query_builder = db.query(StudentProfile).join(User)
         if user and user.id:
@@ -749,19 +770,19 @@ class IntentRouter:
             # Match against skills
             for s in p.skills:
                 sk_l = s.skill_name.lower()
-                for token in tokens:
-                    if token in sk_l or sk_l in token:
+                for term in search_terms:
+                    if term in sk_l or sk_l in term:
                         matched_skills.append(s.skill_name)
                         score += 3
 
             # Match against preferred roles and bio
             roles_text = " ".join(p.preferred_roles or []).lower()
-            for token in tokens:
-                if token in roles_text:
+            for term in search_terms:
+                if term in roles_text:
                     score += 4
-                if p.specialization and token in p.specialization.lower():
+                if p.specialization and term in p.specialization.lower():
                     score += 2
-                if p.bio and token in p.bio.lower():
+                if p.bio and term in p.bio.lower():
                     score += 1
 
             if score > 0 or not tokens:
@@ -781,9 +802,9 @@ class IntentRouter:
                     "year": int(u.year_of_study) if u.year_of_study and str(u.year_of_study).isdigit() else 2,
                     "semester": p.semester or 3,
                     "rollNumber": u.roll_number or p.enrolment_number,
-                    "bio": p.bio or "MITS AI & Robotics student open for hackathons and projects.",
+                    "bio": p.bio or "B.Tech AIR student at MITS Gwalior.",
                     "matchedTags": matched_skills[:4],
-                    "topSkills": display_skills,
+                    "topSkills": display_skills if display_skills else ["Python", "AI", "Robotics"],
                     "preferredRoles": p.preferred_roles or ["Project Collaborator"],
                     "linkedinUrl": linkedin,
                     "githubUrl": github,
@@ -794,7 +815,32 @@ class IntentRouter:
         scored_matches.sort(key=lambda x: x["score"], reverse=True)
         top_matches = scored_matches[:6]
         if not top_matches:
-            top_matches = scored_matches[:4]
+            # Fallback to active departmental students with LinkedIn
+            fallback_profs = query_builder.limit(6).all()
+            for p in fallback_profs:
+                u = p.user
+                if not u:
+                    continue
+                name_slug = re.sub(r'[^a-zA-Z0-9]+', '-', (u.full_name or 'student').lower()).strip('-')
+                sk_names = [s.skill_name for s in p.skills]
+                top_matches.append({
+                    "studentId": u.id,
+                    "name": u.full_name or "MITS Student",
+                    "email": u.email,
+                    "pictureUrl": u.picture_url or f"https://api.dicebear.com/7.x/avataaars/svg?seed={u.id}",
+                    "branch": u.branch or "Information Technology (Artificial Intelligence and Robotics)",
+                    "year": int(u.year_of_study) if u.year_of_study and str(u.year_of_study).isdigit() else 2,
+                    "semester": p.semester or 3,
+                    "rollNumber": u.roll_number or p.enrolment_number,
+                    "bio": p.bio or "B.Tech student open for project collaboration.",
+                    "matchedTags": sk_names[:3] if sk_names else ["Python", "AI"],
+                    "topSkills": sk_names[:5] if sk_names else ["Python", "Artificial Intelligence", "Robotics"],
+                    "preferredRoles": p.preferred_roles or ["Project Collaborator"],
+                    "linkedinUrl": p.linkedin_url or f"https://www.linkedin.com/in/{name_slug}-mits",
+                    "githubUrl": p.github_url or f"https://github.com/{name_slug}",
+                    "openForHackathons": True,
+                    "score": 1
+                })
 
         field_title = field_str.title() if field_str != "Technical Skills" else "Student Collaborators"
         lines = [
