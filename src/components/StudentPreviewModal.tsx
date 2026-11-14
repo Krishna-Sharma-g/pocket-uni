@@ -98,6 +98,7 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
     yearOfStudy: year,
     semester,
     departmentName: userObj?.departmentName || 'Centre for Artificial Intelligence',
+    batch: (userObj as any)?.batch || '2024-2028',
     section: userObj?.section || 'A'
   };
 

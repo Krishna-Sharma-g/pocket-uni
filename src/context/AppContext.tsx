@@ -365,18 +365,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (active) {
           setCurrentUser(previous => {
             if (!previous || previous.id !== identity.id) return previous;
+            const nameRollMatch = (identity.full_name || previous.fullName || '').match(/\b(BT[A-Z0-9]+)\b/);
+            const derivedRoll = profile.enrolmentNumber || profile.rollNumber || identity.roll_number || (identity as any).enrolment_number || (nameRollMatch ? nameRollMatch[1] : undefined) || previous.enrolmentNumber || previous.rollNumber;
+            const derivedBranch = profile.branch || identity.branch || previous.branch || 'Information Technology (Artificial Intelligence and Robotics)';
+            const derivedBatch = profile.batch || (identity as any).batch || previous.batch || '2024-2028';
+            const derivedYear = Number(profile.yearOfStudy || identity.year_of_study) || previous.yearOfStudy || 2;
+            const derivedSem = Number(profile.semester) || (identity as any).semester || previous.semester || 3;
+            const derivedSection = profile.section || (identity as any).section || previous.section || 'A';
+
             return {
               ...previous,
               fullName: identity.full_name || previous.fullName,
               email: identity.email,
               pictureUrl: identity.picture_url || previous.pictureUrl,
-              rollNumber: profile.rollNumber || identity.roll_number || previous.rollNumber,
-              enrolmentNumber: profile.enrolmentNumber || previous.enrolmentNumber,
-              branch: profile.branch || identity.branch || previous.branch,
-              yearOfStudy: Number(profile.yearOfStudy || identity.year_of_study) || previous.yearOfStudy,
-              semester: Number(profile.semester) || previous.semester,
-              section: profile.section || previous.section,
-              departmentName: profile.department || identity.department_name || previous.departmentName
+              rollNumber: derivedRoll,
+              enrolmentNumber: derivedRoll,
+              branch: derivedBranch,
+              batch: derivedBatch,
+              yearOfStudy: derivedYear,
+              semester: derivedSem,
+              section: derivedSection,
+              departmentName: profile.department || identity.department_name || previous.departmentName || 'Centre for Artificial Intelligence'
             };
           });
           setCurrentStudentProfile(mapStudentProfileFromApi(profile, identity.id));

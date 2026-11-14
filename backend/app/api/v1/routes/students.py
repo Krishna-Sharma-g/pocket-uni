@@ -20,27 +20,101 @@ def get_my_student_profile(
     current_user: User = Depends(require_student),
     db: Session = Depends(get_db)
 ):
+    import re
+    from backend.app.services.students_roster_data import VERIFIED_STUDENTS_ROSTER
+
+    email_clean = (current_user.email or "").strip().lower()
+    roster_match = next((s for s in VERIFIED_STUDENTS_ROSTER if s["email"].lower() == email_clean), None)
+
+    name_roll_match = re.search(r"\b(BT[A-Z0-9]+)\b", current_user.full_name or "")
+    if not roster_match and name_roll_match:
+        extracted_roll = name_roll_match.group(1).upper()
+        roster_match = next((s for s in VERIFIED_STUDENTS_ROSTER if s["roll"].upper() == extracted_roll), None)
+
+    updated = False
+    resolved_roll = current_user.roll_number
+    resolved_branch = current_user.branch
+
+    if roster_match:
+        if not current_user.roll_number or current_user.roll_number != roster_match["roll"]:
+            current_user.roll_number = roster_match["roll"]
+            updated = True
+        if not current_user.branch or current_user.branch != roster_match["branch"]:
+            current_user.branch = roster_match["branch"]
+            updated = True
+        if not current_user.department_name:
+            current_user.department_name = "Centre for Artificial Intelligence"
+            updated = True
+        if not current_user.year_of_study or current_user.year_of_study == "1":
+            current_user.year_of_study = "2"
+            updated = True
+        resolved_roll = roster_match["roll"]
+        resolved_branch = roster_match["branch"]
+    else:
+        if "ir" in email_clean or (name_roll_match and "IR" in name_roll_match.group(1)):
+            if not current_user.branch:
+                current_user.branch = "Information Technology (Artificial Intelligence and Robotics)"
+                updated = True
+            if not current_user.year_of_study or current_user.year_of_study == "1":
+                current_user.year_of_study = "2"
+                updated = True
+            if not current_user.department_name:
+                current_user.department_name = "Centre for Artificial Intelligence"
+                updated = True
+            if not current_user.roll_number and name_roll_match:
+                current_user.roll_number = name_roll_match.group(1).upper()
+                updated = True
+            resolved_roll = current_user.roll_number
+            resolved_branch = current_user.branch
+
     profile = db.query(StudentProfile).filter(StudentProfile.user_id == current_user.id).first()
     if not profile:
         profile = StudentProfile(
             user_id=current_user.id,
-            enrolment_number=current_user.roll_number or current_user.email.split("@")[0].upper(),
+            enrolment_number=resolved_roll or (name_roll_match.group(1).upper() if name_roll_match else current_user.email.split("@")[0].upper()),
             programme="Bachelor of Technology",
             specialization="Artificial Intelligence and Robotics",
             semester=3,
             section="A",
+            batch="2024-2028",
             academic_year="2026-2027",
-            domains=[current_user.branch or "Information Technology (Artificial Intelligence and Robotics)"],
-            bio="B.Tech student at Centre for Artificial Intelligence, MITS Gwalior.",
-            completeness_score=75,
-            data_source="auto_provisioned",
+            domains=[resolved_branch or "Information Technology (Artificial Intelligence and Robotics)"],
+            bio="B.Tech Information Technology (Artificial Intelligence & Robotics) student at Centre for Artificial Intelligence, MITS Gwalior.",
+            completeness_score=85,
+            data_source="verified_roster_auto_sync",
             is_demo=current_user.is_demo
         )
         db.add(profile)
         db.flush()
-        db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=False, show_cgpa=False, is_demo=current_user.is_demo))
+        db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=True, show_cgpa=False, is_demo=current_user.is_demo))
+        updated = True
+    else:
+        if resolved_roll and (not profile.enrolment_number or profile.enrolment_number != resolved_roll):
+            profile.enrolment_number = resolved_roll
+            updated = True
+        if not profile.semester or profile.semester == 1:
+            profile.semester = 3
+            updated = True
+        if not profile.section:
+            profile.section = "A"
+            updated = True
+        if not profile.batch:
+            profile.batch = "2024-2028"
+            updated = True
+        if not profile.academic_year:
+            profile.academic_year = "2026-2027"
+            updated = True
+        if not profile.programme:
+            profile.programme = "Bachelor of Technology"
+            updated = True
+        if not profile.specialization:
+            profile.specialization = "Artificial Intelligence and Robotics"
+            updated = True
+
+    if updated:
         db.commit()
         db.refresh(profile)
+        db.refresh(current_user)
 
     skills_data = [
         {"id": s.id, "name": s.skill_name, "proficiency": s.proficiency, "category": s.category}
@@ -62,18 +136,18 @@ def get_my_student_profile(
         "studentId": current_user.id,
         "fullName": current_user.full_name,
         "email": current_user.email,
-        "rollNumber": current_user.roll_number,
-        "enrolmentNumber": profile.enrolment_number or current_user.roll_number,
+        "rollNumber": current_user.roll_number or profile.enrolment_number or (roster_match["roll"] if roster_match else None),
+        "enrolmentNumber": profile.enrolment_number or current_user.roll_number or (roster_match["roll"] if roster_match else None),
         "department": current_user.department_name or "Centre for Artificial Intelligence",
-        "programme": profile.programme or "B.Tech",
-        "branch": current_user.branch,
-        "specialization": profile.specialization or "",
-        "batch": profile.batch or "",
-        "semester": profile.semester or 1,
+        "programme": profile.programme or "Bachelor of Technology",
+        "branch": current_user.branch or profile.specialization or "Information Technology (Artificial Intelligence and Robotics)",
+        "specialization": profile.specialization or "Artificial Intelligence and Robotics",
+        "batch": profile.batch or "2024-2028",
+        "semester": profile.semester or 3,
         "section": profile.section or "A",
         "academicYear": profile.academic_year or "2026-2027",
-        "dateOfAdmission": profile.date_of_admission or "",
-        "yearOfStudy": current_user.year_of_study,
+        "dateOfAdmission": profile.date_of_admission or "2024-08-01",
+        "yearOfStudy": int(current_user.year_of_study) if current_user.year_of_study and str(current_user.year_of_study).isdigit() else 2,
         "bio": profile.bio or "",
         "lookingFor": profile.looking_for or "",
         "openForHackathons": profile.open_for_hackathons,

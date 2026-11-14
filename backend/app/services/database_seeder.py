@@ -409,6 +409,7 @@ def ensure_database_initialized(db: Optional[Session] = None):
                     enrolment_number=roll_number,
                     programme=programme,
                     specialization="Artificial Intelligence and Robotics",
+                    batch="2024-2028",
                     semester=semester,
                     section="A",
                     academic_year="2026-2027",
@@ -436,6 +437,8 @@ def ensure_database_initialized(db: Optional[Session] = None):
                     profile.semester = semester
                 if not profile.section:
                     profile.section = "A"
+                if not profile.batch:
+                    profile.batch = "2024-2028"
                 if not profile.academic_year:
                     profile.academic_year = "2026-2027"
                 if not profile.programme:
@@ -474,6 +477,14 @@ def ensure_database_initialized(db: Optional[Session] = None):
                 sp.github_url = f"https://github.com/{name_slug}"
             if not sp.preferred_roles or sp.preferred_roles == ["Project Collaborator"]:
                 sp.preferred_roles = [track["role"], "Project Collaborator"]
+            if not sp.batch:
+                sp.batch = "2024-2028"
+            if not sp.semester:
+                sp.semester = 3
+            if not sp.section:
+                sp.section = "A"
+            if not u.year_of_study:
+                u.year_of_study = "2"
 
             existing_skills = {s.skill_name.lower() for s in sp.skills}
             for sk_name in track["skills"]:

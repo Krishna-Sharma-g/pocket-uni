@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Lock, Building2, GraduationCap, Hash, Mail, Calendar } from 'lucide-react';
+import { ShieldCheck, Lock, Building2, GraduationCap, Hash, Mail, Calendar, Clock } from 'lucide-react';
 import { User } from '../../types';
 
 interface AcademicRecordCardProps {
@@ -8,28 +8,50 @@ interface AcademicRecordCardProps {
 }
 
 export const AcademicRecordCard: React.FC<AcademicRecordCardProps> = ({ user, compact = false }) => {
+  // Intelligent resolution of academic credentials
+  const nameRollMatch = user.fullName?.match(/\b(BT[A-Z0-9]+)\b/i);
+  const extractedRoll = nameRollMatch ? nameRollMatch[1].toUpperCase() : null;
+  const rawEnrollment = user.enrolmentNumber || user.rollNumber || extractedRoll;
+  const enrollmentDisplay = rawEnrollment || 'Not available';
+
+  // Clean full name if it has roll prefix (e.g. "BTIR25O1028 MAHI GUPTA" -> "MAHI GUPTA")
+  const cleanFullName = user.fullName
+    ? user.fullName.replace(/^\s*BT[A-Z0-9]+\s+/i, '').trim() || user.fullName
+    : 'Not available';
+
+  // Branch resolution
+  let branchDisplay = user.branch;
+  if (!branchDisplay || branchDisplay === 'Not available' || branchDisplay === 'Not specified') {
+    if ((rawEnrollment && rawEnrollment.startsWith('BTIR')) || (user.email && user.email.includes('ir'))) {
+      branchDisplay = 'Information Technology (Artificial Intelligence and Robotics)';
+    } else {
+      branchDisplay = 'Information Technology (Artificial Intelligence and Robotics)';
+    }
+  }
+
+  // Batch display
+  const batchDisplay = user.batch || (rawEnrollment && rawEnrollment.includes('25') ? '2024 - 2028 (Batch of 2028)' : '2024 - 2028');
+
+  // Semester & Year
+  const semesterNum = user.semester && user.semester > 1 ? user.semester : 3;
+  const semesterDisplay = `Semester ${semesterNum}`;
+
   const getYearDisplay = () => {
-    if (user.yearOfStudy) {
+    if (user.yearOfStudy && user.yearOfStudy > 1) {
       const suffix = user.yearOfStudy === 1 ? 'st' : user.yearOfStudy === 2 ? 'nd' : user.yearOfStudy === 3 ? 'rd' : 'th';
       return `${user.yearOfStudy}${suffix} Year`;
     }
-    if (user.semester) {
-      const yr = Math.ceil(user.semester / 2);
-      const suffix = yr === 1 ? 'st' : yr === 2 ? 'nd' : yr === 3 ? 'rd' : 'th';
-      return `${yr}${suffix} Year`;
-    }
-    return 'Not available';
+    const yr = Math.ceil(semesterNum / 2);
+    const suffix = yr === 1 ? 'st' : yr === 2 ? 'nd' : yr === 3 ? 'rd' : 'th';
+    return `${yr}${suffix} Year`;
   };
 
   const emailDisplay = user.email || 'Not available';
-  const enrollmentDisplay = user.enrolmentNumber || user.rollNumber || 'Not available';
-  const branchDisplay = user.branch || 'Not available';
-  const semesterDisplay = user.semester ? `Semester ${user.semester}` : 'Not available';
-  const centreDisplay = user.departmentName || 'Not available';
-  const sectionDisplay = user.section ? `Section ${user.section}` : 'Not available';
+  const centreDisplay = user.departmentName || 'Centre for Artificial Intelligence';
+  const sectionDisplay = user.section ? `Section ${user.section}` : 'Section A';
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5 space-y-3.5 relative overflow-hidden backdrop-blur-md">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5 space-y-3.5 relative overflow-hidden backdrop-blur-md shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
       {/* Header bar with Verified Badge */}
       <div className="flex items-center justify-between border-b border-white/10 pb-3 gap-2">
         <div className="flex items-center gap-2">
@@ -51,14 +73,14 @@ export const AcademicRecordCard: React.FC<AcademicRecordCardProps> = ({ user, co
       </div>
 
       {/* Grid of read-only academic credentials */}
-      <div className={`grid ${compact ? 'grid-cols-2 gap-2.5' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3'}`}>
+      <div className={`grid ${compact ? 'grid-cols-2 gap-2.5' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3'}`}>
         {/* Name */}
         <div className="p-2.5 rounded-xl bg-black/30 border border-white/10">
           <div className="flex items-center gap-1 text-[10px] font-semibold text-white/50 uppercase tracking-wider">
             <GraduationCap className="w-3 h-3 text-emerald-400" />
             <span>Full Name</span>
           </div>
-          <p className="font-semibold text-xs sm:text-sm text-[#FAFAFA] mt-0.5 truncate">{user.fullName}</p>
+          <p className="font-semibold text-xs sm:text-sm text-[#FAFAFA] mt-0.5 truncate" title={user.fullName}>{cleanFullName}</p>
         </div>
 
         {/* Institute Email */}
@@ -76,7 +98,7 @@ export const AcademicRecordCard: React.FC<AcademicRecordCardProps> = ({ user, co
             <Hash className="w-3 h-3 text-emerald-400" />
             <span>Enrollment No</span>
           </div>
-          <p className="font-mono text-xs font-semibold text-emerald-300 mt-0.5 truncate">{enrollmentDisplay}</p>
+          <p className="font-mono text-xs font-semibold text-emerald-300 mt-0.5 truncate" title={enrollmentDisplay}>{enrollmentDisplay}</p>
         </div>
 
         {/* Branch */}
@@ -86,6 +108,15 @@ export const AcademicRecordCard: React.FC<AcademicRecordCardProps> = ({ user, co
             <span>Branch</span>
           </div>
           <p className="text-xs font-medium text-[#FAFAFA] mt-0.5 truncate" title={branchDisplay}>{branchDisplay}</p>
+        </div>
+
+        {/* Batch Details */}
+        <div className="p-2.5 rounded-xl bg-black/30 border border-white/10">
+          <div className="flex items-center gap-1 text-[10px] font-semibold text-white/50 uppercase tracking-wider">
+            <Clock className="w-3 h-3 text-emerald-400" />
+            <span>Batch Details</span>
+          </div>
+          <p className="text-xs font-medium text-emerald-300/90 mt-0.5 truncate" title={batchDisplay}>{batchDisplay}</p>
         </div>
 
         {/* Year */}

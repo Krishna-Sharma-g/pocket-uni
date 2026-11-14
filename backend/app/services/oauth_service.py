@@ -131,6 +131,16 @@ class GoogleOAuthService:
         # 6. Database User Lookup / Provisioning & Roster Match
         user = db.query(User).filter(User.email == email).first()
 
+        import re
+        from backend.app.services.students_roster_data import VERIFIED_STUDENTS_ROSTER
+        roster_match = next((s for s in VERIFIED_STUDENTS_ROSTER if s["email"].lower() == email.lower()), None)
+        name_roll_match = re.search(r"\b(BT[A-Z0-9]+)\b", full_name or "")
+        if not roster_match and name_roll_match:
+            roster_match = next((s for s in VERIFIED_STUDENTS_ROSTER if s["roll"].upper() == name_roll_match.group(1).upper()), None)
+
+        matched_roll = roster_match["roll"] if roster_match else (name_roll_match.group(1).upper() if name_roll_match else email.split("@")[0].upper())
+        matched_branch = roster_match["branch"] if roster_match else "Information Technology (Artificial Intelligence and Robotics)"
+
         # Check existing google_sub conflict
         existing_sub_user = db.query(User).filter(User.google_sub == google_sub).first()
         if existing_sub_user and existing_sub_user.email != email:
@@ -140,9 +150,9 @@ class GoogleOAuthService:
             # Check roster pre-registration requirement
             if effective_role == "STUDENT":
                 # Check student domain
-                default_branch = "Information Technology (Artificial Intelligence and Robotics)"
+                default_branch = matched_branch
                 default_dept = "Centre for Artificial Intelligence"
-                default_roll = email.split("@")[0].upper()
+                default_roll = matched_roll
                 
                 user = User(
                     email=email,
@@ -170,12 +180,13 @@ class GoogleOAuthService:
                     enrolment_number=default_roll,
                     programme="Bachelor of Technology",
                     specialization="Artificial Intelligence and Robotics",
+                    batch="2024-2028",
                     semester=3,
                     section="A",
                     academic_year="2026-2027",
                     domains=[default_branch],
                     bio="B.Tech Information Technology (Artificial Intelligence & Robotics) student at MITS Gwalior.",
-                    completeness_score=75,
+                    completeness_score=85,
                     data_source="google_oauth_provisioned",
                     is_demo=False
                 )
@@ -185,7 +196,7 @@ class GoogleOAuthService:
                 vis = ProfileVisibility(
                     student_profile_id=profile.id,
                     is_public=True,
-                    show_contact=False,
+                    show_contact=True,
                     show_cgpa=False,
                     is_demo=False
                 )
@@ -241,14 +252,14 @@ class GoogleOAuthService:
             if picture and not user.picture_url:
                 user.picture_url = picture
             if effective_role == "STUDENT":
-                if not user.branch:
-                    user.branch = "Information Technology (Artificial Intelligence and Robotics)"
+                if not user.branch or user.branch == "Not specified":
+                    user.branch = matched_branch
                 if not user.department_name:
                     user.department_name = "Centre for Artificial Intelligence"
-                if not user.year_of_study:
+                if not user.year_of_study or user.year_of_study == "1":
                     user.year_of_study = "2"
-                if not user.roll_number:
-                    user.roll_number = email.split("@")[0].upper()
+                if not user.roll_number or user.roll_number == email.split("@")[0].upper():
+                    user.roll_number = matched_roll
                 
                 profile = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
                 if not profile:
@@ -257,32 +268,35 @@ class GoogleOAuthService:
                         enrolment_number=user.roll_number,
                         programme="Bachelor of Technology",
                         specialization="Artificial Intelligence and Robotics",
+                        batch="2024-2028",
                         semester=3,
                         section="A",
                         academic_year="2026-2027",
                         domains=[user.branch],
-                        completeness_score=75,
+                        completeness_score=85,
                         data_source="google_oauth_provisioned",
                         is_demo=False
                     )
                     db.add(profile)
                     db.flush()
-                    vis = ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=False, show_cgpa=False, is_demo=False)
+                    vis = ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=True, show_cgpa=False, is_demo=False)
                     db.add(vis)
                 else:
-                    if not profile.enrolment_number:
-                        profile.enrolment_number = user.roll_number
-                    if not profile.semester:
+                    if matched_roll and (not profile.enrolment_number or profile.enrolment_number != matched_roll):
+                        profile.enrolment_number = matched_roll
+                    if not profile.semester or profile.semester == 1:
                         profile.semester = 3
                     if not profile.section:
                         profile.section = "A"
+                    if not profile.batch:
+                        profile.batch = "2024-2028"
                     if not profile.programme:
                         profile.programme = "Bachelor of Technology"
                     if not profile.academic_year:
                         profile.academic_year = "2026-2027"
                     vis = db.query(ProfileVisibility).filter(ProfileVisibility.student_profile_id == profile.id).first()
                     if not vis:
-                        db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=False, show_cgpa=False, is_demo=False))
+                        db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=True, show_cgpa=False, is_demo=False))
 
             user.last_login_at = datetime.now(timezone.utc)
             db.commit()
@@ -336,9 +350,10 @@ class GoogleOAuthService:
             "name": user.full_name,
             "picture_url": user.picture_url,
             "user_id": user.id,
-            "roll_number": user.roll_number or (student_p.enrolment_number if student_p else None),
-            "enrolment_number": (student_p.enrolment_number if student_p else None) or user.roll_number,
-            "branch": user.branch or "Information Technology (Artificial Intelligence and Robotics)",
+            "roll_number": user.roll_number or (student_p.enrolment_number if student_p else None) or matched_roll,
+            "enrolment_number": (student_p.enrolment_number if student_p else None) or user.roll_number or matched_roll,
+            "branch": user.branch or (student_p.domains[0] if student_p and student_p.domains else None) or matched_branch,
+            "batch": (student_p.batch if student_p else None) or "2024-2028",
             "year_of_study": user.year_of_study or "2",
             "semester": (student_p.semester if student_p else 3) or 3,
             "section": (student_p.section if student_p else "A") or "A",

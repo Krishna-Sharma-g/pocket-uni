@@ -34,7 +34,11 @@ class CurrentUserResponse(BaseModel):
     active_context: Optional[str] = None
     picture_url: Optional[str] = None
     roll_number: Optional[str] = None
+    enrolment_number: Optional[str] = None
     branch: Optional[str] = None
+    batch: Optional[str] = None
+    semester: Optional[int] = None
+    section: Optional[str] = None
     year_of_study: Optional[str] = None
     department_name: Optional[str] = None
     designation: Optional[str] = None

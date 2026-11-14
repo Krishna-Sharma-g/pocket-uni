@@ -255,7 +255,14 @@ def sandbox_login(
 
 
 @router.get("/me", response_model=CurrentUserResponse)
-def get_current_user_profile(current_user: User = Depends(get_current_user)):
+def get_current_user_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    import re
+    from backend.app.models.student import StudentProfile
+    from backend.app.services.students_roster_data import VERIFIED_STUDENTS_ROSTER
+
     user_roles = [ur.role.name for ur in current_user.roles if ur.role]
     primary_role = "STUDENT"
     if "SUPER_ADMIN" in user_roles:
@@ -265,6 +272,20 @@ def get_current_user_profile(current_user: User = Depends(get_current_user)):
 
     active_context = getattr(current_user, "_active_context", None) or primary_role
 
+    student_p = db.query(StudentProfile).filter(StudentProfile.user_id == current_user.id).first() if primary_role == "STUDENT" else None
+
+    email_clean = (current_user.email or "").strip().lower()
+    roster_match = next((s for s in VERIFIED_STUDENTS_ROSTER if s["email"].lower() == email_clean), None)
+    name_roll_match = re.search(r"\b(BT[A-Z0-9]+)\b", current_user.full_name or "")
+    if not roster_match and name_roll_match:
+        roster_match = next((s for s in VERIFIED_STUDENTS_ROSTER if s["roll"].upper() == name_roll_match.group(1).upper()), None)
+
+    roll_number = current_user.roll_number or (student_p.enrolment_number if student_p else None) or (roster_match["roll"] if roster_match else None)
+    branch = current_user.branch or (roster_match["branch"] if roster_match else None) or "Information Technology (Artificial Intelligence and Robotics)"
+    batch = (student_p.batch if student_p else None) or "2024-2028"
+    semester = (student_p.semester if student_p else 3) or 3
+    section = (student_p.section if student_p else "A") or "A"
+
     return CurrentUserResponse(
         id=current_user.id,
         email=current_user.email,
@@ -272,10 +293,14 @@ def get_current_user_profile(current_user: User = Depends(get_current_user)):
         role=primary_role,
         active_context=active_context,
         picture_url=current_user.picture_url,
-        roll_number=current_user.roll_number,
-        branch=current_user.branch,
-        year_of_study=current_user.year_of_study,
-        department_name=current_user.department_name,
+        roll_number=roll_number,
+        enrolment_number=roll_number,
+        branch=branch,
+        batch=batch,
+        semester=semester,
+        section=section,
+        year_of_study=current_user.year_of_study or "2",
+        department_name=current_user.department_name or "Centre for Artificial Intelligence",
         designation=current_user.designation,
         is_active=current_user.is_active,
         is_demo=current_user.is_demo

@@ -69,6 +69,7 @@ export const LandingPage: React.FC = () => {
             enrolmentNumber: data.enrolment_number || data.roll_number,
             branch: data.branch || 'Information Technology (Artificial Intelligence and Robotics)',
             departmentName: data.department_name || 'Centre for Artificial Intelligence',
+            batch: data.batch || '2024-2028',
             yearOfStudy: typeof data.year_of_study === 'string' && !isNaN(Number(data.year_of_study)) ? Number(data.year_of_study) : (typeof data.year_of_study === 'number' ? data.year_of_study : 2),
             semester: data.semester || 3,
             section: data.section || 'A'
