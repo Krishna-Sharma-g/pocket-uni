@@ -7,6 +7,7 @@ from backend.app.models.identity import User
 from backend.app.models.student import StudentProfile, StudentSkill
 from backend.app.models.faculty import FacultyProfile, FacultyResearchInterest
 from backend.app.models.academic import Laboratory, ClassCoordinator
+from backend.app.models.academic_records import TimetableEntry
 from backend.app.models.document import InstitutionalDocument
 from backend.app.services.timetable_service import timetable_service
 from backend.app.services.gemini_service import gemini_service
@@ -113,9 +114,10 @@ class IntentRouter:
             "faculty researching", "who teaches", "hod", "head of department", "dean", "director",
             "mausam", "rajni", "pawan", "arun", "ramnaresh", "shradha", "aftab",
             "manish dixit", "akhilesh tiwari", "karuna markam", "sanjeev sharma",
-            "vikas sejwar", "pk singhal", "singhal", "dixit", "tiwari", "markam"
+            "vikas sejwar", "pk singhal", "singhal", "dixit", "tiwari", "markam",
+            "instructor", "lecturer", "teach", "teaches", "teaching"
         ]
-        if any(p in q for p in faculty_terms) or re.search(r"\b(who\s+is\s+)?(dr|prof|professor)\b", q):
+        if any(p in q for p in faculty_terms) or re.search(r"\b(who\s+is\s+)?(dr|prof|professor|teacher)\b", q):
             return "FACULTY_LOOKUP"
 
         # 8. Greeting & Conversational Intent
@@ -834,19 +836,66 @@ class IntentRouter:
 
     def _handle_faculty_lookup(self, db: Session, query: str) -> Optional[Dict[str, Any]]:
         """
-        Dynamically searches the verified faculty database by name, designation, department,
-        research interests, courses, or keywords.
+        Dynamically searches verified faculty records and institutional teaching allocations
+        by name, designation, subject/course (ML, AI, Robotics, DSA, etc.), or department.
         """
         ql = query.lower().strip()
+
+        # Acronym expansions for subjects and technical domains
+        acronyms = {
+            "ml": "machine learning",
+            "ai": "artificial intelligence",
+            "dl": "deep learning",
+            "rl": "reinforcement learning",
+            "cv": "computer vision",
+            "nlp": "natural language",
+            "dsa": "algorithms",
+            "dbms": "database",
+            "os": "operating systems",
+            "iot": "internet of things",
+            "hpc": "high performance computing"
+        }
+        expanded_q = ql
+        for acr, exp in acronyms.items():
+            expanded_q = re.sub(r"\b" + acr + r"\b", exp, expanded_q)
 
         stop_words = {
             "who", "is", "the", "are", "about", "tell", "me", "prof", "professor", "dr", "dr.",
             "mr", "mrs", "ms", "faculty", "teacher", "teachers", "at", "in", "of", "for", "and",
-            "please", "give", "show", "details", "contact", "email", "phone", "office", "what"
+            "please", "give", "show", "details", "contact", "email", "phone", "office", "what",
+            "teach", "teaches", "teaching", "associated", "with", "whose", "name"
         }
-        tokens = [w for w in re.sub(r'[^\w\s]', ' ', ql).split() if w not in stop_words and len(w) > 2]
+        tokens = [w for w in re.sub(r'[^\w\s]', ' ', expanded_q).split() if w not in stop_words and len(w) >= 2]
 
         facs = []
+        teaching_allocations = {}  # faculty_name -> set of course names
+
+        # 1. Search Timetable for courses taught
+        for subject_kw in [
+            "machine learning", "deep learning", "neural network", "artificial intelligence",
+            "robotics", "algorithms", "data structures", "operating systems", "database",
+            "cyber security", "cloud", "natural language", "computer vision", "reinforcement learning",
+            "iot", "python", "discrete", "probability", "data science"
+        ]:
+            if subject_kw in expanded_q or subject_kw in ql:
+                tt_entries = db.query(TimetableEntry).filter(TimetableEntry.subject.ilike(f"%{subject_kw}%")).all()
+                for e in tt_entries:
+                    if e.faculty_name:
+                        teaching_allocations.setdefault(e.faculty_name.strip(), set()).add(e.subject.strip())
+
+        # Match faculty profiles for teachers found in timetable
+        for fac_name, courses in teaching_allocations.items():
+            # Try fuzzy matching against FacultyProfile
+            cleaned_name = fac_name.replace("Dr.", "").replace("Prof.", "").replace("Mr.", "").strip()
+            first_last = cleaned_name.split()
+            search_clause = FacultyProfile.name.ilike(f"%{cleaned_name}%")
+            if first_last:
+                search_clause = search_clause | FacultyProfile.name.ilike(f"%{first_last[0]}%")
+            p = db.query(FacultyProfile).filter(search_clause).first()
+            if p and p not in facs:
+                facs.append(p)
+
+        # 2. Search by tokens in FacultyProfile name, bio, designation, department
         for token in tokens:
             matches = db.query(FacultyProfile).filter(
                 (FacultyProfile.name.ilike(f"%{token}%")) |
@@ -859,7 +908,8 @@ class IntentRouter:
                 if m not in facs:
                     facs.append(m)
 
-        if "robotics" in ql:
+        # 3. Handle specific domain fallbacks
+        if "robotics" in expanded_q:
             extra = db.query(FacultyProfile).filter(
                 (FacultyProfile.bio.ilike("%robotics%")) |
                 (FacultyProfile.name.in_(["Dr. Arun Kumar", "Dr. Pawan Dubey", "Dr. Tej Singh"]))
@@ -867,53 +917,68 @@ class IntentRouter:
             for m in extra:
                 if m not in facs:
                     facs.append(m)
-        elif "algorithm" in ql or "data structure" in ql or "dsa" in ql:
-            extra = db.query(FacultyProfile).filter(
-                (FacultyProfile.bio.ilike("%algorithm%")) |
-                (FacultyProfile.name.in_(["Dr. Abhishek Bhatt", "Dr. Anurag Singh Tomar", "Dr. Rajni Ranjan Singh Makwana"]))
-            ).all()
-            for m in extra:
-                if m not in facs:
-                    facs.append(m)
-        elif "hod" in ql or "head" in ql:
+        elif "hod" in expanded_q or "head" in expanded_q or "dean" in expanded_q:
             extra = db.query(FacultyProfile).filter(
                 (FacultyProfile.designation.ilike("%head%")) |
-                (FacultyProfile.bio.ilike("%head%"))
+                (FacultyProfile.designation.ilike("%dean%")) |
+                (FacultyProfile.bio.ilike("%head%")) |
+                (FacultyProfile.bio.ilike("%dean%"))
             ).all()
             for m in extra:
                 if m not in facs:
                     facs.append(m)
 
-        if not facs and any(k in ql for k in ["faculty", "professor", "professors", "teachers", "list"]):
+        # 4. Fallback if query mentions faculty / professor / teacher generally
+        if not facs and any(k in ql for k in ["faculty", "professor", "professors", "prof", "teacher", "teachers", "list"]):
             facs = db.query(FacultyProfile).limit(6).all()
 
         if not facs:
             return None
 
-        lines = [f"### Verified Faculty Directory — MITS Gwalior\n"]
+        # Build response lines
+        topic_header = "Faculty & Subject Allotments"
+        for t in ["Machine Learning", "Deep Learning", "Robotics", "Algorithms", "Operating Systems", "Python", "Data Science"]:
+            if t.lower() in expanded_q:
+                topic_header = f"Faculty Members: {t}"
+                break
+
+        lines = [f"### Verified Faculty Directory — {topic_header}\n"]
         cards_data = []
 
         for f in facs[:5]:
             dept_display = f.centre or f.department or "Centre for Artificial Intelligence"
             lines.append(f"#### **{f.name}** — {f.designation}")
             lines.append(f"- **Department**: {dept_display}")
+
+            # Check if this faculty has allocated teaching courses in master timetable
+            allocated_courses = None
+            for key, courses in teaching_allocations.items():
+                if f.name.lower() in key.lower() or key.lower() in f.name.lower() or (f.name.split()[-1] in key):
+                    allocated_courses = list(courses)
+                    break
+
+            if allocated_courses:
+                course_str = ", ".join([f"`{c}`" for c in allocated_courses])
+                lines.append(f"- **Teaching Allotment (Session 2026)**: {course_str}")
+
             if f.qualification:
                 lines.append(f"- **Qualification**: {f.qualification}")
             if f.email_public:
-                lines.append(f"- **Email**: [{f.email_public}](mailto:{f.email_public})")
+                lines.append(f"- **Official Email**: [{f.email_public}](mailto:{f.email_public})")
             if f.phone_internal or f.phone_public:
-                lines.append(f"- **Contact**: `{f.phone_internal or f.phone_public}`")
+                lines.append(f"- **Internal Contact**: `{f.phone_internal or f.phone_public}`")
             if f.office_location:
                 lines.append(f"- **Office**: {f.office_location}")
             if f.bio:
-                short_bio = f.bio[:200] + "..." if len(f.bio) > 200 else f.bio
-                lines.append(f"- **Overview**: *{short_bio}*")
+                short_bio = f.bio[:220] + "..." if len(f.bio) > 220 else f.bio
+                lines.append(f"- **Research Overview**: *{short_bio}*")
             lines.append("")
 
             cards_data.append({
                 "name": f.name,
                 "designation": f.designation,
                 "department": dept_display,
+                "courses": allocated_courses or [],
                 "qualification": f.qualification,
                 "email": f.email_public,
                 "phone": f.phone_internal or f.phone_public,
@@ -921,18 +986,18 @@ class IntentRouter:
                 "bio": f.bio
             })
 
-        lines.append(f"✅ *Source: Official MITS Gwalior Faculty Directory (web.mitsgwalior.in)*")
+        lines.append(f"✅ *Verification: Official MITS Gwalior Academic & Teaching Directory (web.mitsgwalior.in)*")
 
         return {
             "answer": "\n".join(lines).strip(),
             "intent": "FACULTY_LOOKUP",
             "citations": [{
-                "title": "Official Faculty Directory — Centre for Artificial Intelligence",
+                "title": "Centre for Artificial Intelligence Faculty Directory & Teaching Allotment",
                 "sourceUrl": "https://web.mitsgwalior.in/faculty-profiles-cai",
                 "category": "FACULTY",
                 "page": 1,
-                "section": "Verified Faculty Profiles",
-                "snippet": f"Official institutional records for {len(facs)} faculty member(s)."
+                "section": topic_header,
+                "snippet": f"Verified faculty records and teaching allocations for {len(facs)} faculty member(s)."
             }],
             "widget": {
                 "type": "FACULTY_CARD",
