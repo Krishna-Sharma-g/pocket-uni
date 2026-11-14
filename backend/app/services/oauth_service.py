@@ -140,11 +140,19 @@ class GoogleOAuthService:
             # Check roster pre-registration requirement
             if effective_role == "STUDENT":
                 # Check student domain
+                default_branch = "Information Technology (Artificial Intelligence and Robotics)"
+                default_dept = "Centre for Artificial Intelligence"
+                default_roll = email.split("@")[0].upper()
+                
                 user = User(
                     email=email,
                     full_name=full_name,
                     picture_url=picture,
                     google_sub=google_sub,
+                    roll_number=default_roll,
+                    branch=default_branch,
+                    year_of_study="2",
+                    department_name=default_dept,
                     is_active=True,
                     is_demo=False
                 )
@@ -159,11 +167,29 @@ class GoogleOAuthService:
                 # Create default student profile shell if not present
                 profile = StudentProfile(
                     user_id=user.id,
-                    programme="B.Tech",
+                    enrolment_number=default_roll,
+                    programme="Bachelor of Technology",
+                    specialization="Artificial Intelligence and Robotics",
+                    semester=3,
+                    section="A",
                     academic_year="2026-2027",
-                    data_source="google_oauth_provisioned"
+                    domains=[default_branch],
+                    bio="B.Tech Information Technology (Artificial Intelligence & Robotics) student at MITS Gwalior.",
+                    completeness_score=75,
+                    data_source="google_oauth_provisioned",
+                    is_demo=False
                 )
                 db.add(profile)
+                db.flush()
+                
+                vis = ProfileVisibility(
+                    student_profile_id=profile.id,
+                    is_public=True,
+                    show_contact=False,
+                    show_cgpa=False,
+                    is_demo=False
+                )
+                db.add(vis)
                 db.commit()
 
             elif effective_role == "FACULTY":
@@ -214,6 +240,50 @@ class GoogleOAuthService:
                 user.google_sub = google_sub
             if picture and not user.picture_url:
                 user.picture_url = picture
+            if effective_role == "STUDENT":
+                if not user.branch:
+                    user.branch = "Information Technology (Artificial Intelligence and Robotics)"
+                if not user.department_name:
+                    user.department_name = "Centre for Artificial Intelligence"
+                if not user.year_of_study:
+                    user.year_of_study = "2"
+                if not user.roll_number:
+                    user.roll_number = email.split("@")[0].upper()
+                
+                profile = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
+                if not profile:
+                    profile = StudentProfile(
+                        user_id=user.id,
+                        enrolment_number=user.roll_number,
+                        programme="Bachelor of Technology",
+                        specialization="Artificial Intelligence and Robotics",
+                        semester=3,
+                        section="A",
+                        academic_year="2026-2027",
+                        domains=[user.branch],
+                        completeness_score=75,
+                        data_source="google_oauth_provisioned",
+                        is_demo=False
+                    )
+                    db.add(profile)
+                    db.flush()
+                    vis = ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=False, show_cgpa=False, is_demo=False)
+                    db.add(vis)
+                else:
+                    if not profile.enrolment_number:
+                        profile.enrolment_number = user.roll_number
+                    if not profile.semester:
+                        profile.semester = 3
+                    if not profile.section:
+                        profile.section = "A"
+                    if not profile.programme:
+                        profile.programme = "Bachelor of Technology"
+                    if not profile.academic_year:
+                        profile.academic_year = "2026-2027"
+                    vis = db.query(ProfileVisibility).filter(ProfileVisibility.student_profile_id == profile.id).first()
+                    if not vis:
+                        db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=False, show_cgpa=False, is_demo=False))
+
             user.last_login_at = datetime.now(timezone.utc)
             db.commit()
 
@@ -255,6 +325,8 @@ class GoogleOAuthService:
             }
         )
 
+        student_p = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first() if effective_role == "STUDENT" else None
+
         return {
             "access_token": access_token,
             "token_type": "bearer",
@@ -263,7 +335,14 @@ class GoogleOAuthService:
             "active_context": active_context,
             "name": user.full_name,
             "picture_url": user.picture_url,
-            "user_id": user.id
+            "user_id": user.id,
+            "roll_number": user.roll_number or (student_p.enrolment_number if student_p else None),
+            "enrolment_number": (student_p.enrolment_number if student_p else None) or user.roll_number,
+            "branch": user.branch or "Information Technology (Artificial Intelligence and Robotics)",
+            "year_of_study": user.year_of_study or "2",
+            "semester": (student_p.semester if student_p else 3) or 3,
+            "section": (student_p.section if student_p else "A") or "A",
+            "department_name": user.department_name or "Centre for Artificial Intelligence",
         }
 
     async def _verify_id_token(self, client: httpx.AsyncClient, id_token: str) -> Dict[str, Any]:

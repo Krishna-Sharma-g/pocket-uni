@@ -552,7 +552,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         branch: user.branch,
         departmentName: user.department_name,
         designation: user.designation,
-        yearOfStudy: user.year_of_study
+        yearOfStudy: user.year_of_study ? Number(user.year_of_study) : 2,
+        rollNumber: user.roll_number,
+        enrolmentNumber: user.roll_number,
+        semester: user.semester || 3,
+        section: user.section || 'A'
       };
       setCurrentUser(appUser);
       if (appUser.role === 'student') {

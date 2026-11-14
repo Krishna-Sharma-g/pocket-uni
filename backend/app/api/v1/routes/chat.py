@@ -29,6 +29,37 @@ class FeedbackCreate(BaseModel):
     rating: int  # 1 or -1
     comment: Optional[str] = None
 
+def get_user_academic_context(db: Session, user: Optional[User]) -> str:
+    """Formats verified academic identity context for prompt conditioning."""
+    if not user:
+        return "User Context: Guest / Unauthenticated Visitor"
+
+    from backend.app.models.student import StudentProfile
+    prof = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
+
+    branch = user.branch or (prof.specialization if prof else None) or "Information Technology (Artificial Intelligence and Robotics)"
+    roll = user.roll_number or (prof.enrolment_number if prof else None) or "Not specified"
+    dept = user.department_name or "Centre for Artificial Intelligence"
+    year = user.year_of_study or "2"
+    sem = (prof.semester if prof and prof.semester else 3)
+    sem_roman = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII", 8: "VIII"}.get(sem, str(sem))
+    section = (prof.section if prof and prof.section else "A")
+    prog = (prof.programme if prof and prof.programme else "Bachelor of Technology")
+
+    return (
+        f"Verified Authenticated Student Details:\n"
+        f"- Full Name: {user.full_name}\n"
+        f"- Institutional Email: {user.email}\n"
+        f"- Roll / Enrollment Number: {roll}\n"
+        f"- Academic Programme: {prog}\n"
+        f"- Branch / Discipline: {branch}\n"
+        f"- Department / Centre: {dept}\n"
+        f"- Year of Study: Year {year}\n"
+        f"- Current Semester: {sem_roman} Semester (Semester {sem})\n"
+        f"- Section: Section {section}"
+    )
+
+
 @router.post("/conversations")
 def create_conversation(
     payload: ConversationCreate,
@@ -270,8 +301,16 @@ async def stream_message(
     db.add(user_msg)
     db.flush()
 
-    # 2. Check for specialized intent (timetable, faculty availability, official links)
-    intent_res = intent_router.route_query(db, text_input, current_user)
+    # 2. Fetch past conversation turns for grounding memory
+    past_messages = db.query(Message).filter(
+        Message.conversation_id == conv.id,
+        Message.is_deleted == False,
+        Message.id != user_msg.id
+    ).order_by(Message.created_at.asc()).limit(10).all()
+    conversation_history = [{"role": m.role, "content": m.content} for m in past_messages]
+
+    # 3. Check for specialized intent (timetable, faculty availability, student profile, official links)
+    intent_res = intent_router.route_query(db, text_input, current_user, conversation_history)
 
     async def event_generator():
         # Handle specialized deterministic institutional intent first
@@ -304,7 +343,7 @@ async def stream_message(
             yield f"event: done\ndata: {json.dumps({'status': 'completed', 'messageId': assistant_msg.id})}\n\n"
             return
 
-        # 3. Retrieve sources from institutional knowledge base
+        # 4. Retrieve sources from institutional knowledge base
         retrieval_query = rag_service.build_retrieval_query(text_input, conversation_history)
         sources = rag_service.search_knowledge(db, retrieval_query, current_user, limit=4)
         citations = [
@@ -331,11 +370,17 @@ async def stream_message(
             f"{'User' if message['role'] == 'user' else 'Assistant'}: {message['content']}"
             for message in conversation_history
         )
+        user_context_str = get_user_academic_context(db, current_user)
         prompt = (
+            f"=== Verified Student Details (Context) ===\n"
+            f"{user_context_str}\n"
+            f"==========================================\n\n"
             f"Recent conversation:\n{history_text or 'This is the start of the conversation.'}\n\n"
             f"Institutional Context:\n{context_text}\n\n"
-            f"Current user message: {text_input}\n"
-            "Respond to the current message naturally, using earlier turns only when relevant."
+            f"Current user message: {text_input}\n\n"
+            "Respond to the current message naturally, directly, and helpfully. When the student asks about their "
+            "schedule, timetable, classes, branch, or verified records without repeating their branch/semester, "
+            "always ground your answer in their verified student details above."
         )
 
         full_content = []

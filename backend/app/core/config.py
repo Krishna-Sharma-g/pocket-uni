@@ -95,7 +95,12 @@ class Settings(BaseSettings):
         # If full DATABASE_URL string provided (e.g. from cloud or CI)
         if self.DATABASE_URL:
             from sqlalchemy.engine import make_url
-            return make_url(self.DATABASE_URL)
+            url_str = self.DATABASE_URL
+            if url_str.startswith("postgres://"):
+                url_str = url_str.replace("postgres://", "postgresql+psycopg://", 1)
+            elif url_str.startswith("postgresql://") and not url_str.startswith("postgresql+"):
+                url_str = url_str.replace("postgresql://", "postgresql+psycopg://", 1)
+            return make_url(url_str)
         
         user = self.DB_USER or self.POSTGRES_USER or "postgres"
         pwd = self.DB_PASSWORD or self.POSTGRES_PASSWORD or ""

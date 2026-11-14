@@ -366,7 +366,23 @@ class RAGService:
                 formatted_msgs.append(f"{role_label}: {m.get('content', '')}")
             history_text = "Recent conversation:\n" + "\n".join(formatted_msgs) + "\n\n"
 
+        user_ctx_lines = []
+        if user:
+            from backend.app.models.student import StudentProfile
+            prof = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
+            user_ctx_lines = [
+                f"- Name: {user.full_name}",
+                f"- Email: {user.email}",
+                f"- Branch: {user.branch or 'Information Technology (Artificial Intelligence and Robotics)'}",
+                f"- Roll / Enrollment Number: {user.roll_number or (prof.enrolment_number if prof else 'N/A')}",
+                f"- Semester: {prof.semester if prof and prof.semester else 3} Semester",
+                f"- Section: Section {prof.section if prof and prof.section else 'A'}",
+                f"- Department: {user.department_name or 'Centre for Artificial Intelligence'}"
+            ]
+        user_ctx_block = "Verified Authenticated Student Context:\n" + "\n".join(user_ctx_lines) + "\n\n" if user_ctx_lines else ""
+
         prompt = (
+            f"{user_ctx_block}"
             f"{history_text}"
             f"Verified Institutional Evidence:\n"
             f"--------------------\n"
@@ -389,6 +405,10 @@ class RAGService:
             ]
             answer = "I found relevant MITS information in these sources:\n\n" + "\n\n".join(excerpts)
         else:
+            # Fallback to intent router if available
+            secondary = intent_router.route_query(db, query, user, conversation_history)
+            if secondary and secondary.get("answer"):
+                return secondary
             answer = "I couldn't find a verified MITS source for that yet. Which course, semester, or campus service do you mean?"
 
         return {

@@ -64,7 +64,14 @@ export const LandingPage: React.FC = () => {
             fullName: data.name || data.email.split('@')[0],
             pictureUrl: data.picture_url || '',
             isActive: true,
-            lastLoginAt: new Date().toISOString()
+            lastLoginAt: new Date().toISOString(),
+            rollNumber: data.roll_number,
+            enrolmentNumber: data.enrolment_number || data.roll_number,
+            branch: data.branch || 'Information Technology (Artificial Intelligence and Robotics)',
+            departmentName: data.department_name || 'Centre for Artificial Intelligence',
+            yearOfStudy: typeof data.year_of_study === 'string' && !isNaN(Number(data.year_of_study)) ? Number(data.year_of_study) : (typeof data.year_of_study === 'number' ? data.year_of_study : 2),
+            semester: data.semester || 3,
+            section: data.section || 'A'
           };
 
           localStorage.setItem('pocketuni_user', JSON.stringify(userObj));

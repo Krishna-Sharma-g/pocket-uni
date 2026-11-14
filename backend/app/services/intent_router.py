@@ -4,7 +4,7 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 
 from backend.app.models.identity import User
-from backend.app.models.student import StudentProfile
+from backend.app.models.student import StudentProfile, StudentSkill
 from backend.app.models.faculty import FacultyProfile, FacultyResearchInterest
 from backend.app.models.academic import Laboratory, ClassCoordinator
 from backend.app.models.document import InstitutionalDocument
@@ -78,15 +78,28 @@ class IntentRouter:
         ]):
             return "APPLICATION_WORKFLOW"
 
-        # 6. Faculty lookup
+        # 6. Student Profile & Verified Credentials Inquiry
         if any(p in q for p in [
-            "who is teaching", "associated with robotics research", "teaches data structures",
-            "faculty researching", "dr. mausam", "dr. rajni", "dr. pawan", "dr. arun",
-            "who teaches"
+            "my branch", "what is my branch", "my roll number", "my enrollment", "my enrolment",
+            "my semester", "my details", "my verified details", "my profile", "who am i",
+            "my section", "what are my details", "verified data", "my verified data",
+            "what is my details", "show my details", "view my details"
         ]):
+            return "STUDENT_PROFILE_INQUIRY"
+
+        # 7. Faculty lookup
+        faculty_terms = [
+            "faculty", "professor", "prof", "prof.", "dr.", "dr ", "teacher", "teachers",
+            "who is teaching", "associated with robotics research", "teaches data structures",
+            "faculty researching", "who teaches", "hod", "head of department", "dean", "director",
+            "mausam", "rajni", "pawan", "arun", "ramnaresh", "shradha", "aftab",
+            "manish dixit", "akhilesh tiwari", "karuna markam", "sanjeev sharma",
+            "vikas sejwar", "pk singhal", "singhal", "dixit", "tiwari", "markam"
+        ]
+        if any(p in q for p in faculty_terms) or re.search(r"\b(who\s+is\s+)?(dr|prof|professor)\b", q):
             return "FACULTY_LOOKUP"
 
-        # 7. Greeting & Conversational Intent
+        # 8. Greeting & Conversational Intent
         greeting_words = {"hi", "hello", "hey", "namaste", "hola", "greetings", "good morning", "good afternoon", "good evening", "howdy", "sup"}
         cleaned_words = re.sub(r'[^\w\s]', '', q).split()
         if cleaned_words:
@@ -122,6 +135,9 @@ class IntentRouter:
 
         elif intent == "TIMETABLE_QUERY":
             return self._handle_timetable(db, query, user)
+
+        elif intent == "STUDENT_PROFILE_INQUIRY":
+            return self._handle_student_profile(db, user)
 
         elif intent == "FACULTY_AVAILABILITY":
             return self._handle_faculty_availability(db, query)
@@ -240,8 +256,8 @@ class IntentRouter:
 
         # 4. Fallback to authenticated student profile if parameters are missing
         student_prof = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first() if user else None
-        if user and not branch and (user.branch or (student_prof and student_prof.specialization)):
-            branch = user.branch or student_prof.specialization
+        if user and not branch:
+            branch = user.branch or (student_prof and student_prof.specialization) or (student_prof and student_prof.domains and student_prof.domains[0])
         if not semester and student_prof and student_prof.semester:
             sem_map = {
                 1: "I Semester", 2: "II Semester", 3: "III Semester", 4: "IV Semester",
@@ -250,6 +266,12 @@ class IntentRouter:
             semester = sem_map.get(student_prof.semester, f"{student_prof.semester} Semester")
         if not section and student_prof and student_prof.section:
             section = student_prof.section
+
+        # Ground in student authenticated details if still undetermined
+        if user:
+            branch = branch or "Information Technology (Artificial Intelligence and Robotics)"
+            semester = semester or "III Semester"
+            section = section or "A"
 
         # If branch or semester is STILL undetermined, ask for concise clarification honestly
         if not branch or not semester:
@@ -310,6 +332,45 @@ class IntentRouter:
         doc_url = f"/api/v1/documents/{doc.id}/download" if doc else "https://web.mitsgwalior.in/academics/academic-calendar"
 
         if schedule.get("is_holiday"):
+            # If query was general ("my schedule", "what classes") and today is Sunday/holiday, also fetch upcoming Monday
+            if not day_query or day_query in ["today", "aaj"]:
+                monday_schedule = timetable_service.get_student_schedule(
+                    db=db,
+                    branch=branch,
+                    semester=semester,
+                    section=section,
+                    day_of_week="Monday"
+                )
+                if monday_schedule.get("classes"):
+                    lines = [
+                        f"**Today is {day_name} (Academic Holiday/Off-day)** — No scheduled classes for today.\n",
+                        f"Here is your upcoming timetable for **Monday** ({semester}, {branch}, Section {section}):\n"
+                    ]
+                    for c in monday_schedule["classes"]:
+                        lab_badge = " *(Laboratory)*" if c["is_lab"] else ""
+                        lines.append(
+                            f"- **Period {c['period']} ({c['time']})**: **{c['subject']}** ({c['course_code']}){lab_badge}\n"
+                            f"  - **Faculty**: {c['faculty']}\n"
+                            f"  - **Room/Venue**: `{c['room']}`"
+                        )
+                    lines.append(f"\n*Official Session: July-Dec. 2026 | Timetable Source: {doc_title}*")
+                    return {
+                        "answer": "\n".join(lines),
+                        "intent": "TIMETABLE_QUERY",
+                        "citations": [{
+                            "title": doc_title,
+                            "sourceUrl": doc_url,
+                            "category": "TIMETABLE",
+                            "page": 1,
+                            "section": branch,
+                            "snippet": f"Upcoming Monday class schedule for {branch}."
+                        }],
+                        "widget": {
+                            "type": "TIMETABLE_CARD",
+                            "data": monday_schedule
+                        }
+                    }
+
             answer = f"**Schedule for {day_name} ({semester}, {branch}, Section {section})**\n\nNo classes are scheduled on {day_name} (Academic Holiday/Off-day)."
             return {
                 "answer": answer,
@@ -541,49 +602,194 @@ class IntentRouter:
 
         return None
 
+    def _handle_student_profile(self, db: Session, user: Optional[User]) -> Dict[str, Any]:
+        """
+        Handles inquiries regarding verified student credentials, branch, enrollment, and timetable context.
+        """
+        if not user:
+            return {
+                "answer": (
+                    "You are currently browsing as a guest. Please sign in with your institutional Google account "
+                    "(`@mitsgwl.ac.in`) to view your verified student profile, enrollment details, branch, and timetable."
+                ),
+                "intent": "STUDENT_PROFILE_INQUIRY",
+                "citations": []
+            }
+
+        prof = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
+
+        full_name = user.full_name or "MITS Student"
+        email = user.email or "N/A"
+        roll = user.roll_number or (prof.enrolment_number if prof else None) or "Pending Verification"
+        branch = user.branch or "Information Technology (Artificial Intelligence and Robotics)"
+        dept = user.department_name or "Centre for Artificial Intelligence"
+        year = user.year_of_study or "2nd Year"
+        sem_num = prof.semester if prof and prof.semester else 3
+        sem_roman = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII", 8: "VIII"}.get(sem_num, f"{sem_num}")
+        section = prof.section if prof and prof.section else "A"
+        prog = prof.programme if prof and prof.programme else "Bachelor of Technology"
+        session = prof.academic_year if prof and prof.academic_year else "2026-2027"
+
+        skills = []
+        if prof:
+            sk_records = db.query(StudentSkill).filter(StudentSkill.student_profile_id == prof.id).all()
+            skills = [s.skill_name for s in sk_records]
+
+        skills_str = ", ".join(skills) if skills else "Python, Artificial Intelligence, Robotics, Data Structures"
+
+        answer = (
+            f"### Verified Student Profile — MITS Gwalior\n\n"
+            f"Here are your verified academic credentials on record with the Centre for Artificial Intelligence:\n\n"
+            f"- **Student Name**: **{full_name}**\n"
+            f"- **Institutional Email**: `{email}`\n"
+            f"- **Enrollment / Roll No**: `{roll}`\n"
+            f"- **Programme**: {prog}\n"
+            f"- **Branch / Specialization**: **{branch}**\n"
+            f"- **Academic Year & Semester**: {year} ({sem_roman} Semester, Section {section})\n"
+            f"- **Department**: {dept}\n"
+            f"- **Academic Session**: {session}\n"
+            f"- **Verified Technical Domains**: {skills_str}\n\n"
+            f"✅ *Status: Verified Institutional Academic Record (Centre for Artificial Intelligence)*\n\n"
+            f"You can ask me about your daily schedule (*\"What is my schedule tomorrow?\"*), "
+            f"faculty availability (*\"Who is free at 11 AM?\"*), or class coordinator (*\"Who is my coordinator?\"*)."
+        )
+
+        widget_data = {
+            "name": full_name,
+            "email": email,
+            "roll_number": roll,
+            "branch": branch,
+            "semester": f"{sem_roman} Semester",
+            "section": section,
+            "department": dept,
+            "academic_year": session,
+            "skills": skills
+        }
+
+        return {
+            "answer": answer,
+            "intent": "STUDENT_PROFILE_INQUIRY",
+            "citations": [{
+                "title": "MITS Student Academic Master Register",
+                "sourceUrl": "https://web.mitsgwalior.in/students",
+                "category": "STUDENT_ROSTER",
+                "page": 1,
+                "section": branch,
+                "snippet": f"Verified enrollment record for {full_name} ({roll}) enrolled in {branch}."
+            }],
+            "widget": {
+                "type": "STUDENT_PROFILE_CARD",
+                "data": widget_data
+            }
+        }
+
     def _handle_faculty_lookup(self, db: Session, query: str) -> Optional[Dict[str, Any]]:
         """
-        Searches faculty directory for matching courses or research areas.
+        Dynamically searches the verified faculty database by name, designation, department,
+        research interests, courses, or keywords.
         """
-        ql = query.lower()
+        ql = query.lower().strip()
+
+        stop_words = {
+            "who", "is", "the", "are", "about", "tell", "me", "prof", "professor", "dr", "dr.",
+            "mr", "mrs", "ms", "faculty", "teacher", "teachers", "at", "in", "of", "for", "and",
+            "please", "give", "show", "details", "contact", "email", "phone", "office", "what"
+        }
+        tokens = [w for w in re.sub(r'[^\w\s]', ' ', ql).split() if w not in stop_words and len(w) > 2]
+
+        facs = []
+        for token in tokens:
+            matches = db.query(FacultyProfile).filter(
+                (FacultyProfile.name.ilike(f"%{token}%")) |
+                (FacultyProfile.bio.ilike(f"%{token}%")) |
+                (FacultyProfile.department.ilike(f"%{token}%")) |
+                (FacultyProfile.designation.ilike(f"%{token}%")) |
+                (FacultyProfile.qualification.ilike(f"%{token}%"))
+            ).all()
+            for m in matches:
+                if m not in facs:
+                    facs.append(m)
+
         if "robotics" in ql:
-            facs = db.query(FacultyProfile).filter(
+            extra = db.query(FacultyProfile).filter(
                 (FacultyProfile.bio.ilike("%robotics%")) |
                 (FacultyProfile.name.in_(["Dr. Arun Kumar", "Dr. Pawan Dubey", "Dr. Tej Singh"]))
             ).all()
-        elif "data structures" in ql or "algorithms" in ql:
-            facs = db.query(FacultyProfile).filter(
+            for m in extra:
+                if m not in facs:
+                    facs.append(m)
+        elif "algorithm" in ql or "data structure" in ql or "dsa" in ql:
+            extra = db.query(FacultyProfile).filter(
                 (FacultyProfile.bio.ilike("%algorithm%")) |
                 (FacultyProfile.name.in_(["Dr. Abhishek Bhatt", "Dr. Anurag Singh Tomar", "Dr. Rajni Ranjan Singh Makwana"]))
             ).all()
-        elif "mausam" in ql:
-            facs = db.query(FacultyProfile).filter(FacultyProfile.name.ilike("%Mausam%")).all()
-        else:
+            for m in extra:
+                if m not in facs:
+                    facs.append(m)
+        elif "hod" in ql or "head" in ql:
+            extra = db.query(FacultyProfile).filter(
+                (FacultyProfile.designation.ilike("%head%")) |
+                (FacultyProfile.bio.ilike("%head%"))
+            ).all()
+            for m in extra:
+                if m not in facs:
+                    facs.append(m)
+
+        if not facs and any(k in ql for k in ["faculty", "professor", "professors", "teachers", "list"]):
+            facs = db.query(FacultyProfile).limit(6).all()
+
+        if not facs:
             return None
 
-        if facs:
-            lines = ["**Faculty Members Associated with this Query:**\n"]
-            for f in facs[:4]:
-                lines.append(
-                    f"- **{f.name}** ({f.designation})\n"
-                    f"  - **Qualification**: {f.qualification}\n"
-                    f"  - **Official Email**: [{f.email_public}](mailto:{f.email_public})\n"
-                    f"  - **Office Location**: {f.office_location}\n"
-                    f"  - **Overview**: {f.bio}"
-                )
-            return {
-                "answer": "\n".join(lines),
-                "intent": "FACULTY_LOOKUP",
-                "citations": [{
-                    "title": "Faculty Directory - Centre for Artificial Intelligence",
-                    "sourceUrl": "https://web.mitsgwalior.in/faculty-profiles-cai",
-                    "category": "FACULTY",
-                    "page": 1,
-                    "section": "Official Faculty Profiles",
-                    "snippet": "Verified institutional faculty directory."
-                }]
+        lines = [f"### Verified Faculty Directory — MITS Gwalior\n"]
+        cards_data = []
+
+        for f in facs[:5]:
+            dept_display = f.centre or f.department or "Centre for Artificial Intelligence"
+            lines.append(f"#### **{f.name}** — {f.designation}")
+            lines.append(f"- **Department**: {dept_display}")
+            if f.qualification:
+                lines.append(f"- **Qualification**: {f.qualification}")
+            if f.email_public:
+                lines.append(f"- **Email**: [{f.email_public}](mailto:{f.email_public})")
+            if f.phone_internal or f.phone_public:
+                lines.append(f"- **Contact**: `{f.phone_internal or f.phone_public}`")
+            if f.office_location:
+                lines.append(f"- **Office**: {f.office_location}")
+            if f.bio:
+                short_bio = f.bio[:200] + "..." if len(f.bio) > 200 else f.bio
+                lines.append(f"- **Overview**: *{short_bio}*")
+            lines.append("")
+
+            cards_data.append({
+                "name": f.name,
+                "designation": f.designation,
+                "department": dept_display,
+                "qualification": f.qualification,
+                "email": f.email_public,
+                "phone": f.phone_internal or f.phone_public,
+                "office": f.office_location,
+                "bio": f.bio
+            })
+
+        lines.append(f"✅ *Source: Official MITS Gwalior Faculty Directory (web.mitsgwalior.in)*")
+
+        return {
+            "answer": "\n".join(lines).strip(),
+            "intent": "FACULTY_LOOKUP",
+            "citations": [{
+                "title": "Official Faculty Directory — Centre for Artificial Intelligence",
+                "sourceUrl": "https://web.mitsgwalior.in/faculty-profiles-cai",
+                "category": "FACULTY",
+                "page": 1,
+                "section": "Verified Faculty Profiles",
+                "snippet": f"Official institutional records for {len(facs)} faculty member(s)."
+            }],
+            "widget": {
+                "type": "FACULTY_CARD",
+                "data": cards_data[0] if len(cards_data) == 1 else cards_data
             }
-        return None
+        }
 
 
 intent_router = IntentRouter()

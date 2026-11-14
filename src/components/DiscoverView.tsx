@@ -19,6 +19,64 @@ import { INITIAL_STUDENTS, StudentWithUser } from '../data/studentData';
 import { StudentCard } from './discover/StudentCard';
 import { getSavedStudentIds } from '../services/savedStudentsService';
 import { StudentMatchCard } from '../types';
+import { apiClient } from '../services/apiClient';
+
+const mapMatchCardToStudent = (c: StudentMatchCard): StudentWithUser => ({
+  user: {
+    id: c.studentId,
+    googleSub: '',
+    email: c.email || '',
+    role: 'student',
+    fullName: c.name,
+    pictureUrl: c.pictureUrl || '',
+    isActive: true,
+    lastLoginAt: new Date().toISOString(),
+    rollNumber: c.rollNumber,
+    enrolmentNumber: c.rollNumber,
+    branch: c.branch,
+    yearOfStudy: c.year,
+    semester: c.semester || 3,
+    gender: c.gender || 'Not Specified'
+  },
+  profile: {
+    studentId: c.studentId,
+    headline: c.headline || c.bio || `${c.branch} student at MITS Gwalior`,
+    primaryDomain: c.primaryDomain || (c.topSkills?.[0]) || 'Artificial Intelligence',
+    bio: c.bio || `B.Tech ${c.branch} student at MITS Gwalior.`,
+    lookingFor: 'Hackathon collaboration and technical projects',
+    lookingForRoles: c.preferredRoles?.length ? c.preferredRoles : ['Hackathon Team', 'Project Collaborator'],
+    openForHackathons: c.openForHackathons ?? true,
+    openSourceContributor: false,
+    competitiveProgramming: false,
+    competitiveHandles: {},
+    isAvailable: true,
+    openToCollaboratingWith: ['Same Branch', 'Other Branches', 'Same Year'],
+    collaborationMode: ['Both'],
+    professionalExperiences: ['Academic Projects'],
+    githubUrl: c.githubUrl || '',
+    linkedinUrl: c.linkedinUrl || '',
+    portfolioUrl: '',
+    availabilityHoursPerWeek: 15,
+    availabilityNotes: 'Available on weekdays and weekends for hackathons',
+    preferredRoles: c.preferredRoles?.length ? c.preferredRoles : ['AI Engineer', 'Software Developer'],
+    clubs: [],
+    skills: (c.topSkills || ['Python', 'AI', 'Robotics']).map((sk, idx) => ({
+      id: `sk-${idx}`,
+      name: sk,
+      proficiency: 'Intermediate',
+      category: 'Framework'
+    })),
+    techStack: c.topSkills || ['Python', 'AI'],
+    interests: c.matchedTags || [],
+    domains: [c.branch],
+    projects: [],
+    experiences: [],
+    certifications: [],
+    profileVisible: true,
+    completenessScore: 80,
+    updatedAt: new Date().toISOString()
+  }
+});
 
 export const DiscoverView: React.FC = () => {
   const { currentUser, setPreviewStudentCard } = useApp();
@@ -42,6 +100,19 @@ export const DiscoverView: React.FC = () => {
   const [savedIds, setSavedIds] = useState<string[]>(() =>
     getSavedStudentIds(currentUser?.id)
   );
+  const [dbStudents, setDbStudents] = useState<StudentWithUser[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    apiClient.getStudentDiscovery()
+      .then((cards) => {
+        if (!active || !Array.isArray(cards)) return;
+        const mapped = cards.map(mapMatchCardToStudent);
+        setDbStudents(mapped);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const handleSavedUpdated = () => {
@@ -53,10 +124,17 @@ export const DiscoverView: React.FC = () => {
     };
   }, [currentUser?.id]);
 
-  // All students except the currently logged-in student
+  // All students (combining live DB students and initial templates, excluding the current user)
   const availableStudents = useMemo(() => {
-    return INITIAL_STUDENTS.filter((s) => s.user.id !== currentUser?.id);
-  }, [currentUser?.id]);
+    const combined = [...dbStudents];
+    const dbIds = new Set(dbStudents.map(s => s.user.id));
+    for (const init of INITIAL_STUDENTS) {
+      if (!dbIds.has(init.user.id)) {
+        combined.push(init);
+      }
+    }
+    return combined.filter((s) => s.user.id !== currentUser?.id);
+  }, [dbStudents, currentUser?.id]);
 
   // Active filter count
   const activeFiltersCount = [

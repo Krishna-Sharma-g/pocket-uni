@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.config import settings
 from backend.app.core.database import engine, Base, check_db_health
+from backend.app.services.database_seeder import ensure_database_initialized
 import backend.app.models  # ensure models are registered
 from backend.app.api.v1.routes import (
     auth,
@@ -35,6 +36,13 @@ async def lifespan(app: FastAPI):
     # Verify database connection on startup
     db_info = check_db_health()
     logger.info(f"Database readiness verified: {db_info['driver']} -> {db_info['database']} ({db_info['url']})")
+
+    # Idempotent initialization & seeding of tables, faculty, timetables, and student roster
+    try:
+        ensure_database_initialized()
+    except Exception as seed_err:
+        logger.error(f"Startup database initialization error: {seed_err}")
+
     yield
 
 

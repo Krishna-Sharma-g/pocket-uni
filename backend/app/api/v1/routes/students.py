@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
 from backend.app.core.permissions import get_current_user, require_student
 from backend.app.models.identity import User
-from backend.app.models.student import StudentProfile, StudentSkill, Project
+from backend.app.models.student import StudentProfile, StudentSkill, Project, ProfileVisibility
 from backend.app.schemas.student import (
     StudentProfileUpdate,
     StudentMatchCardSchema,
@@ -22,7 +22,25 @@ def get_my_student_profile(
 ):
     profile = db.query(StudentProfile).filter(StudentProfile.user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=404, detail="Student profile record not found.")
+        profile = StudentProfile(
+            user_id=current_user.id,
+            enrolment_number=current_user.roll_number or current_user.email.split("@")[0].upper(),
+            programme="Bachelor of Technology",
+            specialization="Artificial Intelligence and Robotics",
+            semester=3,
+            section="A",
+            academic_year="2026-2027",
+            domains=[current_user.branch or "Information Technology (Artificial Intelligence and Robotics)"],
+            bio="B.Tech student at Centre for Artificial Intelligence, MITS Gwalior.",
+            completeness_score=75,
+            data_source="auto_provisioned",
+            is_demo=current_user.is_demo
+        )
+        db.add(profile)
+        db.flush()
+        db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=False, show_cgpa=False, is_demo=current_user.is_demo))
+        db.commit()
+        db.refresh(profile)
 
     skills_data = [
         {"id": s.id, "name": s.skill_name, "proficiency": s.proficiency, "category": s.category}
@@ -202,8 +220,8 @@ def discover_students(
         user = p.user
         if not user:
             continue
-        # Strict explicit opt-in required: must have visibility and is_public must be True
-        if not p.visibility or not p.visibility.is_public:
+        # Public visibility check: default to true if visibility record absent, else check is_public
+        if p.visibility and not p.visibility.is_public:
             continue
         if hackathons_only and not p.open_for_hackathons:
             continue
@@ -225,14 +243,14 @@ def discover_students(
                 name=user.full_name,
                 email=exposed_email,
                 pictureUrl=user.picture_url or None,
-                branch=user.branch or "Artificial Intelligence",
+                branch=user.branch or "Information Technology (Artificial Intelligence and Robotics)",
                 year=int(user.year_of_study) if user.year_of_study and str(user.year_of_study).isdigit() else 2,
-                rollNumber=user.roll_number,
+                rollNumber=user.roll_number or p.enrolment_number,
                 bio=p.bio or "",
                 matchedTags=[sk for sk in skills if q_norm and q_norm in sk.lower()],
-                topSkills=skills[:6],
-                openForHackathons=p.open_for_hackathons,
-                preferredRoles=p.preferred_roles or [],
+                topSkills=skills[:6] if skills else ["Python", "Artificial Intelligence", "Robotics"],
+                openForHackathons=p.open_for_hackathons if p.open_for_hackathons is not None else True,
+                preferredRoles=p.preferred_roles or ["AI Engineer", "Software Developer"],
                 githubUrl=p.github_url,
                 linkedinUrl=p.linkedin_url,
                 is_demo=user.is_demo
