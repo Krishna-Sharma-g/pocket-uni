@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from backend.app.core.config import settings
 from backend.app.core.security import create_access_token
 from backend.app.models.identity import User, Role, UserRole, UserSession
-from backend.app.models.student import StudentProfile
+from backend.app.models.student import StudentProfile, ProfileVisibility
 from backend.app.models.faculty import FacultyProfile
 from backend.app.models.admin import AuditLog
 
