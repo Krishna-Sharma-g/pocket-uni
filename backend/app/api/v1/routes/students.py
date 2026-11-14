@@ -215,6 +215,9 @@ def discover_students(
 
     cards: List[StudentMatchCardSchema] = []
     q_norm = (query or "").lower().strip()
+    import re
+    stop_words = {"students", "student", "want", "for", "find", "show", "give", "need", "who", "are", "with", "the", "i", "a", "an", "at", "in", "of"}
+    query_tokens = [w for w in re.sub(r'[^\w\s]', ' ', q_norm).split() if len(w) >= 2 and w not in stop_words]
 
     for p in profiles:
         user = p.user
@@ -231,7 +234,10 @@ def discover_students(
         skills = [s.skill_name for s in p.skills]
         all_text = f"{user.full_name} {user.branch} {p.bio} {' '.join(skills)} {' '.join(p.interests or [])} {' '.join(p.preferred_roles or [])}".lower()
 
-        if q_norm and q_norm not in all_text:
+        if query_tokens:
+            if not any(t in all_text for t in query_tokens):
+                continue
+        elif q_norm and q_norm not in all_text:
             continue
 
         # Check contact privacy: only expose email if show_contact is explicitly True

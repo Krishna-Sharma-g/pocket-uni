@@ -814,14 +814,14 @@ class IntentRouter:
 
         scored_matches.sort(key=lambda x: x["score"], reverse=True)
         top_matches = scored_matches[:6]
-        if not top_matches:
-            # Fallback to active departmental students in DB
-            fallback_profs = query_builder.limit(6).all()
-            if not fallback_profs:
-                fallback_profs = db.query(StudentProfile).join(User).limit(6).all()
-            for p in fallback_profs:
+
+        existing_ids = {s["studentId"] for s in top_matches}
+
+        # Backfill up to 6 students if fewer matched exact query terms
+        if len(top_matches) < 6:
+            for p in all_profiles:
                 u = p.user
-                if not u:
+                if not u or u.id in existing_ids:
                     continue
                 name_slug = re.sub(r'[^a-zA-Z0-9]+', '-', (u.full_name or 'student').lower()).strip('-')
                 sk_names = [s.skill_name for s in p.skills]
@@ -835,20 +835,25 @@ class IntentRouter:
                     "semester": p.semester or 3,
                     "rollNumber": u.roll_number or p.enrolment_number,
                     "bio": p.bio or "B.Tech student open for project collaboration.",
-                    "matchedTags": sk_names[:3] if sk_names else ["Python", "AI"],
-                    "topSkills": sk_names[:5] if sk_names else ["Python", "Artificial Intelligence", "Robotics"],
+                    "matchedTags": sk_names[:3] if sk_names else ["Python", field_title],
+                    "topSkills": sk_names[:5] if sk_names else ["Backend", "Python", "FastAPI", "Docker"],
                     "preferredRoles": p.preferred_roles or ["Project Collaborator"],
                     "linkedinUrl": p.linkedin_url or f"https://www.linkedin.com/in/{name_slug}-mits",
                     "githubUrl": p.github_url or f"https://github.com/{name_slug}",
                     "openForHackathons": True,
                     "score": 1
                 })
+                existing_ids.add(u.id)
+                if len(top_matches) >= 6:
+                    break
 
         # Ultimate fallback to verified institutional student dataset
-        if not top_matches:
+        if len(top_matches) < 6:
             try:
                 from backend.app.services.students_roster_data import VERIFIED_STUDENTS_ROSTER
-                for item in VERIFIED_STUDENTS_ROSTER[:6]:
+                for item in VERIFIED_STUDENTS_ROSTER:
+                    if item["roll"] in existing_ids or any(s.get("rollNumber") == item["roll"] for s in top_matches):
+                        continue
                     name_slug = re.sub(r'[^a-zA-Z0-9]+', '-', item["name"].lower()).strip('-')
                     top_matches.append({
                         "studentId": item["roll"],
@@ -868,6 +873,9 @@ class IntentRouter:
                         "openForHackathons": True,
                         "score": 1
                     })
+                    existing_ids.add(item["roll"])
+                    if len(top_matches) >= 6:
+                        break
             except Exception:
                 pass
 
