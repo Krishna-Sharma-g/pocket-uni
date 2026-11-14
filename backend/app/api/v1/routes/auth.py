@@ -186,6 +186,12 @@ def sandbox_login(
     - FACULTY: CAI Faculty Member & Mentor
     Uses stable pre-existing IDs without creating duplicate accounts.
     """
+    if not settings.LOCAL_DEV_AUTH_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sandbox login is disabled in this environment."
+        )
+
     req_role = (payload.role if payload else role or persona or "STUDENT").strip().upper()
 
     if req_role in ["SUPER_ADMIN", "ADMIN"]:
