@@ -18,18 +18,15 @@ export const AcademicRecordCard: React.FC<AcademicRecordCardProps> = ({ user, co
       const suffix = yr === 1 ? 'st' : yr === 2 ? 'nd' : yr === 3 ? 'rd' : 'th';
       return `${yr}${suffix} Year`;
     }
-    return '2nd Year';
+    return 'Not available';
   };
 
-  const emailDisplay = user.email.includes('@example.invalid')
-    ? 'aarav.sharma@mitsgwl.ac.in'
-    : user.email;
-
-  const enrollmentDisplay = user.enrolmentNumber || user.rollNumber || '0901CS231001';
-  const branchDisplay = user.branch || 'Computer Science & Engineering';
-  const semesterDisplay = user.semester ? `Semester ${user.semester}` : 'Semester 4';
-  const centreDisplay = user.departmentName || 'Centre for Artificial Intelligence';
-  const sectionDisplay = user.section ? `Section ${user.section}` : 'Section A';
+  const emailDisplay = user.email || 'Not available';
+  const enrollmentDisplay = user.enrolmentNumber || user.rollNumber || 'Not available';
+  const branchDisplay = user.branch || 'Not available';
+  const semesterDisplay = user.semester ? `Semester ${user.semester}` : 'Not available';
+  const centreDisplay = user.departmentName || 'Not available';
+  const sectionDisplay = user.section ? `Section ${user.section}` : 'Not available';
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5 space-y-3.5 relative overflow-hidden backdrop-blur-md">

@@ -85,7 +85,7 @@ Inside the `backend/` folder, create or edit `.env` (or copy from `.env.example`
 DATABASE_URL=postgresql://postgres:postgrespassword@localhost:5432/pocketuni
 
 # JWT Security
-SECRET_KEY=your-secure-secret-key-for-local-development-2026
+SECRET_KEY=replace_with_a_unique_random_secret_before_running
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
 # AI Intelligence (Official Google Gemini API)

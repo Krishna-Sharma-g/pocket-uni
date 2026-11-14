@@ -218,6 +218,7 @@ class GoogleOAuthService:
             db.commit()
 
         # 7. Record Session & Audit Event
+        now = time.time()
         session_token = secrets.token_hex(32)
         user_session = UserSession(
             user_id=user.id,

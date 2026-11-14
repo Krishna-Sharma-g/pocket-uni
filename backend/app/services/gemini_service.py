@@ -7,6 +7,7 @@ logger = logging.getLogger("pocketuni.gemini")
 
 class GeminiService:
     def __init__(self):
+        self.enabled = settings.GEMINI_ENABLED
         self.api_key = settings.GEMINI_API_KEY
         self.chat_model = settings.GEMINI_CHAT_MODEL
         self.embedding_model = settings.GEMINI_EMBEDDING_MODEL
@@ -18,6 +19,8 @@ class GeminiService:
 
     def _get_client(self):
         if self._client is None:
+            if not self.enabled:
+                raise RuntimeError("Gemini integration is disabled.")
             if not self.api_key:
                 raise ValueError("GEMINI_API_KEY is not configured in environment.")
             from google import genai
@@ -25,7 +28,7 @@ class GeminiService:
         return self._client
 
     def is_configured(self) -> bool:
-        return bool(self.api_key and len(self.api_key) > 10)
+        return bool(self.enabled and self.api_key and len(self.api_key) > 10)
 
     def get_service_status(self) -> Dict[str, Any]:
         """Returns safe operational status without exposing secrets."""
@@ -45,6 +48,9 @@ class GeminiService:
         max_output_tokens: Optional[int] = None
     ) -> str:
         """Generates content with retries and structured error classification."""
+        if not self.is_configured():
+            return "Gemini isn't connected in this local setup yet. Add GEMINI_API_KEY to the root .env and restart the backend; retrieved source citations are still available."
+
         client = self._get_client()
         temp = temperature if temperature is not None else self.temperature
         tokens = max_output_tokens if max_output_tokens is not None else self.max_output_tokens
@@ -101,6 +107,10 @@ class GeminiService:
         temperature: Optional[float] = None
     ) -> AsyncIterator[str]:
         """Streams content tokens asynchronously."""
+        if not self.is_configured():
+            yield "Gemini isn't connected in this local setup yet. Add GEMINI_API_KEY to the root .env and restart the backend; retrieved source citations are listed below."
+            return
+
         client = self._get_client()
         temp = temperature if temperature is not None else self.temperature
 

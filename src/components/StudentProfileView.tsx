@@ -43,6 +43,9 @@ export const StudentProfileView: React.FC = () => {
   const {
     currentUser,
     currentStudentProfile,
+    studentProfileLoading,
+    studentProfileError,
+    reloadStudentProfile,
     updateStudentProfile,
     profileSaveIndicator
   } = useApp();
@@ -80,21 +83,21 @@ export const StudentProfileView: React.FC = () => {
     if (!currentStudentProfile) return;
     const p = currentStudentProfile;
     setAvatarUrl(currentUser?.pictureUrl || '');
-    setHeadline(p.headline || 'Fullstack Developer | React | Python');
+    setHeadline(p.headline || '');
     setAboutMe(p.aboutMe || p.bio || '');
-    setPrimaryDomain(p.primaryDomain || p.domains?.[0] || 'AI / ML');
+    setPrimaryDomain(p.primaryDomain || p.domains?.[0] || '');
     setSkills(p.skills || []);
-    setProfessionalExperiences(p.professionalExperiences || ['Personal Projects', 'Hackathons']);
+    setProfessionalExperiences(p.professionalExperiences || []);
     setResumeFileName(p.resumeFileName);
     setResumeFileSize(p.resumeFileSize);
     setGithubUrl(p.githubUrl || '');
     setLinkedinUrl(p.linkedinUrl || '');
     setPortfolioUrl(p.portfolioUrl || '');
     setAchievements(p.achievements || '');
-    setLookingFor(p.lookingForRoles || (p.lookingFor ? p.lookingFor.split(',').map(s => s.trim()) : ['Hackathon Team']));
+    setLookingFor(p.lookingForRoles || (p.lookingFor ? p.lookingFor.split(',').map(s => s.trim()) : []));
     setIsAvailable(p.isAvailable !== undefined ? p.isAvailable : p.openForHackathons);
-    setOpenTo(p.openToCollaboratingWith || ['Same Branch', 'Other Branches']);
-    setCollaborationMode(p.collaborationMode || ['Both']);
+    setOpenTo(p.openToCollaboratingWith || []);
+    setCollaborationMode(p.collaborationMode || []);
     setErrorMsg(null);
   };
 
@@ -102,10 +105,44 @@ export const StudentProfileView: React.FC = () => {
     syncFormFromProfile();
   }, [currentStudentProfile, currentUser]);
 
-  if (!currentUser || !currentStudentProfile) {
+  if (!currentUser || currentUser.role !== 'student') {
     return (
       <div className="flex-1 flex items-center justify-center p-8 text-center text-white/60 text-sm">
         Please sign in as a student to view your profile.
+      </div>
+    );
+  }
+
+  if (studentProfileLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 text-center text-white/70 text-sm" role="status">
+        Loading the profile for {currentUser.email}...
+      </div>
+    );
+  }
+
+  if (currentStudentProfile && currentStudentProfile.studentId !== currentUser.id) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 text-center text-white/70 text-sm" role="status">
+        Loading the profile for {currentUser.email}...
+      </div>
+    );
+  }
+
+  if (studentProfileError || !currentStudentProfile || currentStudentProfile.studentId !== currentUser.id) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
+        <p className="text-sm text-white/75">
+          {studentProfileError || `No database profile is linked to ${currentUser.email}.`}
+        </p>
+        <button
+          type="button"
+          onClick={reloadStudentProfile}
+          className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/[0.06] px-3 py-2 text-xs font-medium text-white hover:bg-white/10"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Reload profile
+        </button>
       </div>
     );
   }
@@ -598,7 +635,7 @@ export const StudentProfileView: React.FC = () => {
                     </div>
 
                     <p className="text-xs font-medium text-emerald-400 mt-1">
-                      {p.headline || 'Fullstack Developer | React | Python'}
+                      {p.headline || 'Student profile'}
                     </p>
 
                     <p className="text-xs text-white/70 mt-1.5 max-w-xl leading-relaxed">

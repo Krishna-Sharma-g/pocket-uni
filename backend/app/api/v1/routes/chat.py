@@ -10,7 +10,7 @@ from backend.app.core.database import get_db
 from backend.app.core.permissions import get_current_user
 from backend.app.models.identity import User
 from backend.app.models.communication import Conversation, Message, Feedback
-from backend.app.services.rag_service import rag_service
+from backend.app.services.rag_service import SYSTEM_PROMPT, rag_service
 from backend.app.services.gemini_service import gemini_service
 
 router = APIRouter()
@@ -177,6 +177,16 @@ def send_message(
     db.add(user_msg)
     db.flush()
 
+    prior_messages = db.query(Message).filter(
+        Message.conversation_id == conv.id,
+        Message.is_deleted == False,
+        Message.id != user_msg.id,
+    ).order_by(Message.created_at.desc()).limit(8).all()
+    conversation_history = [
+        {"role": message.role, "content": message.content}
+        for message in reversed(prior_messages)
+    ]
+
     # 2. Fetch past conversation turns for grounding memory
     past_messages = db.query(Message).filter(
         Message.conversation_id == conv.id,
@@ -295,10 +305,12 @@ async def stream_message(
             return
 
         # 3. Retrieve sources from institutional knowledge base
-        sources = rag_service.search_knowledge(db, text_input, current_user, limit=4)
+        retrieval_query = rag_service.build_retrieval_query(text_input, conversation_history)
+        sources = rag_service.search_knowledge(db, retrieval_query, current_user, limit=4)
         citations = [
             {
                 "title": s["title"],
+                "sourceUrl": s.get("source_url"),
                 "category": s["category"],
                 "page": s["page_number"],
                 "section": s["section"],
@@ -310,19 +322,43 @@ async def stream_message(
 
         yield f"event: citations\ndata: {json.dumps(citations)}\n\n"
 
-        context_parts = [f"Source ({s['title']}, Page {s['page_number']}):\n{s['text']}" for s in sources]
+        context_parts = [
+            f"Source ({s['title']}, Page {s['page_number']}, Section {s['section']}, URL {s.get('source_url') or 'not available'}):\n{s['text']}"
+            for s in sources
+        ]
         context_text = "\n\n".join(context_parts) if context_parts else "No relevant documents found."
+        history_text = "\n".join(
+            f"{'User' if message['role'] == 'user' else 'Assistant'}: {message['content']}"
+            for message in conversation_history
+        )
         prompt = (
-            f"You are PocketUni, an AI institutional assistant for Madhav Institute of Technology & Science (MITS-DU), Gwalior.\n"
-            f"Ground your answer strictly on the institutional context below. Do not speculate.\n\n"
+            f"Recent conversation:\n{history_text or 'This is the start of the conversation.'}\n\n"
             f"Institutional Context:\n{context_text}\n\n"
-            f"Question: {text_input}\nAnswer:"
+            f"Current user message: {text_input}\n"
+            "Respond to the current message naturally, using earlier turns only when relevant."
         )
 
         full_content = []
-        async for token in gemini_service.generate_stream(prompt):
-            full_content.append(token)
-            yield f"event: delta\ndata: {json.dumps({'text': token})}\n\n"
+        if gemini_service.is_configured():
+            async for token in gemini_service.generate_stream(prompt, system_instruction=SYSTEM_PROMPT):
+                full_content.append(token)
+                yield f"event: delta\ndata: {json.dumps({'text': token})}\n\n"
+        elif sources:
+            fallback_parts = ["I found relevant information in these MITS sources:"]
+            fallback_parts.extend(
+                f"**{source['title']} (Page {source['page_number']})**\n"
+                f"[Open official source]({source.get('source_url')})\n{source['text'][:700]}"
+                for source in sources[:3]
+            )
+            fallback_answer = "\n\n".join(fallback_parts)
+            for start in range(0, len(fallback_answer), 80):
+                token = fallback_answer[start:start + 80]
+                full_content.append(token)
+                yield f"event: delta\ndata: {json.dumps({'text': token})}\n\n"
+        else:
+            fallback_answer = "I couldn't find a verified MITS source for that yet. Which course, semester, or campus service do you mean?"
+            full_content.append(fallback_answer)
+            yield f"event: delta\ndata: {json.dumps({'text': fallback_answer})}\n\n"
 
         complete_answer = "".join(full_content)
         assistant_msg = Message(

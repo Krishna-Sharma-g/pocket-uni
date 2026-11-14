@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     )
 
     # Gemini AI Configuration
+    GEMINI_ENABLED: bool = False
     GEMINI_API_KEY: str = ""
     GEMINI_CHAT_MODEL: str = "gemini-2.5-flash"
     GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"

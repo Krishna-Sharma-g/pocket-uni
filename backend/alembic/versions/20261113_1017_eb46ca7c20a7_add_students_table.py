@@ -27,9 +27,12 @@ def upgrade() -> None:
     op.create_index(op.f('ix_department_events_id'), 'department_events', ['id'], unique=False)
     op.create_index(op.f('ix_department_programmes_id'), 'department_programmes', ['id'], unique=False)
     op.create_index(op.f('ix_laboratories_id'), 'laboratories', ['id'], unique=False)
-    op.drop_column('notifications', 'action_url')
-    op.drop_column('notifications', 'extra_data')
-    op.drop_column('notifications', 'is_read')
+    notification_columns = {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns("notifications")
+    }
+    for column_name in ("action_url", "extra_data", "is_read"):
+        if column_name in notification_columns:
+            op.drop_column("notifications", column_name)
     # ### end Alembic commands ###
 
 

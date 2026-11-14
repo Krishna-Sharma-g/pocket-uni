@@ -16,6 +16,7 @@ import { searchStudents } from '../services/discoveryEngine';
 import { processAgentInput, ApplicationSlots } from '../services/applicationAgentEngine';
 import { apiClient } from '../services/apiClient';
 import { realtimeClient } from '../services/realtimeClient';
+import { mapStudentProfileFromApi } from '../services/studentProfileMapper';
 
 export type ActiveView =
   | 'landing'
@@ -33,6 +34,9 @@ interface AppContextType {
   setCurrentUser: (user: User | null) => void;
   currentStudentProfile: StudentProfile | null;
   setCurrentStudentProfile: (profile: StudentProfile | null) => void;
+  studentProfileLoading: boolean;
+  studentProfileError: string | null;
+  reloadStudentProfile: () => void;
   activeView: ActiveView;
   setActiveView: (view: ActiveView) => void;
   // Auth
@@ -106,8 +110,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
 
   const [currentStudentProfile, setCurrentStudentProfile] = useState<StudentProfile | null>(() => {
-    const saved = localStorage.getItem('pocketuni_profile');
-    return saved ? JSON.parse(saved) : null;
+    const savedUser = localStorage.getItem('pocketuni_user');
+    const user = savedUser ? JSON.parse(savedUser) as User : null;
+    if (!user?.id) return null;
+    const saved = localStorage.getItem(`pocketuni_profile_${user.id}`);
+    const profile = saved ? JSON.parse(saved) as StudentProfile : null;
+    return profile?.studentId === user.id ? profile : null;
   });
 
   const [activeView, setActiveView] = useState<ActiveView>(() => {
@@ -164,6 +172,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [authError, setAuthError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [profileSaveIndicator, setProfileSaveIndicator] = useState<boolean>(false);
+  const [studentProfileLoading, setStudentProfileLoading] = useState(false);
+  const [studentProfileError, setStudentProfileError] = useState<string | null>(null);
+  const [profileReloadVersion, setProfileReloadVersion] = useState(0);
 
   const [selectedFaculty, setSelectedFaculty] = useState<FacultyProfile | null>(null);
   const [previewStudentCard, setPreviewStudentCard] = useState<StudentMatchCard | null>(null);
@@ -320,10 +331,71 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [currentChatId]);
 
   useEffect(() => {
-    if (currentStudentProfile) {
-      localStorage.setItem('pocketuni_profile', JSON.stringify(currentStudentProfile));
+    if (currentUser?.id && currentStudentProfile?.studentId === currentUser.id) {
+      localStorage.setItem(`pocketuni_profile_${currentUser.id}`, JSON.stringify(currentStudentProfile));
     }
-  }, [currentStudentProfile]);
+  }, [currentUser?.id, currentStudentProfile]);
+
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'student' || !apiClient.getToken()) {
+      setStudentProfileLoading(false);
+      setStudentProfileError(null);
+      return;
+    }
+
+    let active = true;
+    const expectedUserId = currentUser.id;
+    const expectedEmail = currentUser.email.trim().toLowerCase();
+    setCurrentStudentProfile(previous => previous?.studentId === expectedUserId ? previous : null);
+    setStudentProfileLoading(true);
+    setStudentProfileError(null);
+
+    const loadProfile = async () => {
+      try {
+        const identity = await apiClient.getMe();
+        if (identity.id !== expectedUserId || identity.email?.trim().toLowerCase() !== expectedEmail) {
+          throw new Error('The active session does not match the signed-in student account. Please sign out and sign in again.');
+        }
+
+        const profile = await apiClient.getMyStudentProfile();
+        if (profile.studentId !== identity.id || profile.email?.trim().toLowerCase() !== expectedEmail) {
+          throw new Error('The student profile returned by the database does not match this account.');
+        }
+
+        if (active) {
+          setCurrentUser(previous => {
+            if (!previous || previous.id !== identity.id) return previous;
+            return {
+              ...previous,
+              fullName: identity.full_name || previous.fullName,
+              email: identity.email,
+              pictureUrl: identity.picture_url || previous.pictureUrl,
+              rollNumber: profile.rollNumber || identity.roll_number || previous.rollNumber,
+              enrolmentNumber: profile.enrolmentNumber || previous.enrolmentNumber,
+              branch: profile.branch || identity.branch || previous.branch,
+              yearOfStudy: Number(profile.yearOfStudy || identity.year_of_study) || previous.yearOfStudy,
+              semester: Number(profile.semester) || previous.semester,
+              section: profile.section || previous.section,
+              departmentName: profile.department || identity.department_name || previous.departmentName
+            };
+          });
+          setCurrentStudentProfile(mapStudentProfileFromApi(profile, identity.id));
+        }
+      } catch (error: any) {
+        if (active) {
+          setCurrentStudentProfile(null);
+          setStudentProfileError(error?.message || 'Could not load the student profile from the database.');
+        }
+      } finally {
+        if (active) setStudentProfileLoading(false);
+      }
+    };
+
+    void loadProfile();
+    return () => { active = false; };
+  }, [currentUser?.id, currentUser?.email, currentUser?.role, profileReloadVersion]);
+
+  const reloadStudentProfile = () => setProfileReloadVersion(version => version + 1);
 
   useEffect(() => {
     localStorage.setItem('pocketuni_sidebar_collapsed', String(sidebarCollapsed));
@@ -484,8 +556,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
       setCurrentUser(appUser);
       if (appUser.role === 'student') {
-        const profRes = await apiClient.getMyStudentProfile().catch(() => null);
-        if (profRes) setCurrentStudentProfile(profRes);
+        setCurrentStudentProfile(null);
         setActiveView('chat');
       } else if (appUser.role === 'faculty') {
         setCurrentStudentProfile(null);
@@ -1159,6 +1230,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setCurrentUser,
         currentStudentProfile,
         setCurrentStudentProfile,
+        studentProfileLoading,
+        studentProfileError,
+        reloadStudentProfile,
         activeView,
         setActiveView,
         loginAs,

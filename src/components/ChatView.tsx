@@ -15,7 +15,6 @@ import {
   Building,
   GraduationCap,
   Calendar,
-  X,
   Clock,
   CheckCircle,
   MapPin,
@@ -24,7 +23,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Message, MessageSource, StudentMatchCard } from '../types';
+import { Message, StudentMatchCard } from '../types';
 import { StudentCard } from './discover/StudentCard';
 
 export const ChatView: React.FC = () => {
@@ -40,7 +39,6 @@ export const ChatView: React.FC = () => {
 
   const [inputText, setInputText] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [selectedSource, setSelectedSource] = useState<MessageSource | null>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -197,7 +195,7 @@ export const ChatView: React.FC = () => {
 
                     {/* Markdown / Formatted text */}
                     <div className="text-sm text-white/90 leading-relaxed font-sans space-y-3 prose-invert max-w-none">
-                      {renderFormattedMessage(msg.content)}
+                      {renderFormattedMessage(msg.content, msg.sources?.[0]?.url || msg.sources?.[0]?.sourceUrl)}
                     </div>
 
                     {/* Discovery Profile Cards */}
@@ -342,17 +340,19 @@ export const ChatView: React.FC = () => {
                           Sources:
                         </span>
                         {msg.sources.map((src, idx) => (
-                          <button
+                          <a
                             key={idx}
-                            onClick={() => setSelectedSource(src)}
+                            href={src.url || src.sourceUrl}
+                            target="_blank"
+                            rel="noreferrer"
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-white/[0.04] border border-white/10 text-white/85 hover:bg-white/[0.08] hover:border-white/20 hover:text-white transition-all shadow-sm"
                           >
                             <span className="w-4 h-4 rounded bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-[10px] font-mono flex items-center justify-center font-bold">
-                              {src.rank}
+                              {src.rank || idx + 1}
                             </span>
                             <span className="truncate max-w-[200px]">{src.title}</span>
                             <ExternalLink className="w-3 h-3 text-white/50" />
-                          </button>
+                          </a>
                         ))}
                       </div>
                     )}
@@ -465,85 +465,106 @@ export const ChatView: React.FC = () => {
         </div>
       </div>
 
-      {/* Source Citation Drawer / Modal */}
-      {selectedSource && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
-          <div className="w-full max-w-lg bg-[#12161A]/95 rounded-3xl shadow-[0_25px_60px_rgba(0,0,0,0.7)] border border-white/15 p-6 space-y-4 backdrop-blur-2xl">
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-emerald-950/60 text-emerald-300 border border-emerald-500/30">
-                  {selectedSource.category} • Grounded Reference
-                </span>
-                <h3 className="font-heading font-semibold text-base text-[#FAFAFA] mt-1.5">
-                  {selectedSource.title}
-                </h3>
-              </div>
-              <button
-                onClick={() => setSelectedSource(null)}
-                className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/[0.06] transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 rounded-xl bg-black/40 border border-white/10 text-xs text-white/85 leading-relaxed font-sans">
-              <p>{selectedSource.snippet}</p>
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              <a
-                href={selectedSource.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
-              >
-                <span>Open official page on web.mitsgwalior.in</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-
-              <button
-                onClick={() => setSelectedSource(null)}
-                className="px-4 py-2 rounded-xl bg-white text-[#12161A] text-xs font-semibold hover:bg-white/90 transition-all cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
 // Formatter to render bullets, bold, and code blocks cleanly
-function renderFormattedMessage(content: string) {
-  const lines = content.split('\n');
+function renderFormattedMessage(content: string, sourceUrl?: string) {
+  const lines = content.replace(/\]\s*\r?\n\s*\(/g, '](').split('\n');
   return (
     <div className="space-y-1.5">
       {lines.map((line, idx) => {
         if (!line.trim()) {
           return <div key={idx} className="h-1.5" />;
         }
+        const heading = line.match(/^(#{1,4})\s+(.+)$/);
+        if (heading) {
+          return (
+            <h4 key={idx} className="font-semibold text-[#FAFAFA]">
+              {renderInlineMarkdown(heading[2], sourceUrl)}
+            </h4>
+          );
+        }
         if (line.startsWith('• ') || line.startsWith('- ')) {
           return (
             <div key={idx} className="flex items-start gap-2 pl-2">
               <span className="text-emerald-400 mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-              <div dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(line.substring(2)) }} />
+              <div>{renderInlineMarkdown(line.substring(2), sourceUrl)}</div>
             </div>
           );
         }
         return (
-          <p key={idx} dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(line) }} />
+          <p key={idx}>{renderInlineMarkdown(line, sourceUrl)}</p>
         );
       })}
     </div>
   );
 }
 
-function formatInlineMarkdown(text: string): string {
-  // Replace bold **text**
-  let res = text.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-[#FAFAFA]">$1</strong>');
-  // Replace citations like [1] with stylized badge
-  res = res.replace(/\[(\d+)\]/g, '<span class="inline-flex items-center justify-center px-1.5 py-0.2 mx-0.5 text-[10px] font-mono font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 rounded">[$1]</span>');
-  return res;
+function renderInlineMarkdown(text: string, sourceUrl?: string) {
+  const tokenPattern = /(!?)\[([^\]]*)\]\(([^)]+)\)|\*\*(.+?)\*\*|`([^`]+)`|\[(\d+)\]|(https?:\/\/[^\s<]+)/g;
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = tokenPattern.exec(text)) !== null) {
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+
+    if (match[3]) {
+      const href = resolveMessageUrl(match[3], sourceUrl);
+      const image = match[1] === '!' || (!match[2] && /\.(?:png|jpe?g|gif|webp|avif)(?:$|[?#])/i.test(match[3]));
+      if (href && image) {
+        nodes.push(<MessageImage key={`image-${match.index}`} src={href} alt={match[2] || 'MITS resource image'} />);
+      } else if (href) {
+        const label = match[2] || (match[3].toLowerCase().match(/\.pdf(?:$|[?#])/) ? 'Open PDF resource' : 'Open linked resource');
+        nodes.push(
+          <a key={`link-${match.index}`} href={href} target="_blank" rel="noreferrer" className="text-emerald-300 underline decoration-emerald-400/50 underline-offset-2 hover:text-emerald-200">
+            {label}<ExternalLink className="inline w-3 h-3 ml-1" />
+          </a>
+        );
+      } else {
+        nodes.push(match[2] || match[3]);
+      }
+    } else if (match[4]) {
+      nodes.push(<strong key={`bold-${match.index}`} className="font-semibold text-[#FAFAFA]">{match[4]}</strong>);
+    } else if (match[5]) {
+      nodes.push(<code key={`code-${match.index}`} className="rounded bg-white/10 px-1 py-0.5 text-emerald-200">{match[5]}</code>);
+    } else if (match[6]) {
+      nodes.push(<span key={`cite-${match.index}`} className="inline-flex items-center justify-center px-1.5 mx-0.5 text-[10px] font-mono font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 rounded">[{match[6]}]</span>);
+    } else if (match[7]) {
+      const href = resolveMessageUrl(match[7], sourceUrl);
+      nodes.push(href ? <a key={`url-${match.index}`} href={href} target="_blank" rel="noreferrer" className="text-emerald-300 underline underline-offset-2 break-all">{match[7]}</a> : match[7]);
+    }
+    lastIndex = tokenPattern.lastIndex;
+  }
+
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+}
+
+function resolveMessageUrl(rawUrl: string, sourceUrl?: string) {
+  try {
+    const url = sourceUrl ? new URL(rawUrl, sourceUrl) : new URL(rawUrl);
+    return ['http:', 'https:', 'mailto:'].includes(url.protocol) ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function MessageImage({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return <a href={src} target="_blank" rel="noreferrer" className="text-emerald-300 underline">Open image on the MITS site</a>;
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      className="my-2 max-h-80 max-w-full rounded-lg border border-white/10 object-contain object-left"
+      onError={() => setFailed(true)}
+    />
+  );
 }

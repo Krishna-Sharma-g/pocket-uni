@@ -186,6 +186,7 @@ export interface MessageSource {
   title: string;
   category: string;
   url: string;
+  sourceUrl?: string;
   snippet: string;
   rank: number;
   score: number;
