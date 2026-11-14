@@ -47,7 +47,13 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
   const studentId = isWithUser ? activeData.user.id : activeData.studentId;
 
   // Retrieve full record from INITIAL_STUDENTS if available
-  const fullRecord = INITIAL_STUDENTS.find((s) => s.user.id === studentId);
+  const fullRecord = INITIAL_STUDENTS.find((s) =>
+    s.user.id === studentId ||
+    s.user.rollNumber === studentId ||
+    s.user.enrolmentNumber === studentId ||
+    ('rollNumber' in activeData && Boolean(activeData.rollNumber) && (s.user.rollNumber === activeData.rollNumber || s.user.enrolmentNumber === activeData.rollNumber)) ||
+    ('email' in activeData && Boolean(activeData.email) && s.user.email.toLowerCase() === (activeData.email || '').toLowerCase())
+  );
   const profile = isWithUser ? activeData.profile : (fullRecord?.profile || null);
   const userObj = isWithUser ? activeData.user : (fullRecord?.user || null);
 

@@ -124,17 +124,27 @@ export const DiscoverView: React.FC = () => {
     };
   }, [currentUser?.id]);
 
-  // All students (combining live DB students and initial templates, excluding the current user)
+  // All students (combining live DB students and verified institutional roster, excluding the current user)
   const availableStudents = useMemo(() => {
     const combined = [...dbStudents];
     const dbIds = new Set(dbStudents.map(s => s.user.id));
+    const dbEmails = new Set(dbStudents.map(s => s.user.email?.toLowerCase().trim()).filter(Boolean));
     for (const init of INITIAL_STUDENTS) {
-      if (!dbIds.has(init.user.id)) {
+      if (!dbIds.has(init.user.id) && !dbEmails.has(init.user.email?.toLowerCase().trim())) {
         combined.push(init);
       }
     }
-    return combined.filter((s) => s.user.id !== currentUser?.id);
-  }, [dbStudents, currentUser?.id]);
+    const currId = currentUser?.id;
+    const currEmail = currentUser?.email?.toLowerCase().trim();
+    const currRoll = (currentUser?.rollNumber || currentUser?.enrolmentNumber)?.toUpperCase().trim();
+
+    return combined.filter((s) => {
+      if (currId && s.user.id === currId) return false;
+      if (currEmail && s.user.email?.toLowerCase().trim() === currEmail) return false;
+      if (currRoll && (s.user.rollNumber?.toUpperCase().trim() === currRoll || s.user.enrolmentNumber?.toUpperCase().trim() === currRoll)) return false;
+      return true;
+    });
+  }, [dbStudents, currentUser]);
 
   // Active filter count
   const activeFiltersCount = [

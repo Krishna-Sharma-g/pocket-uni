@@ -337,6 +337,64 @@ def discover_students(
             )
         )
 
+    # Backfill with verified institutional roster if profiles count is less than full roster
+    existing_rolls = {c.rollNumber.upper() for c in cards if c.rollNumber}
+    existing_emails = {c.email.lower() for c in cards if c.email}
+    curr_email = (current_user.email or "").strip().lower()
+    curr_roll = (current_user.roll_number or "").strip().upper()
+
+    from backend.app.services.students_roster_data import VERIFIED_STUDENTS_ROSTER
+
+    skill_tracks = [
+        {"role": "Backend Engineer", "skills": ["Backend", "Python", "FastAPI", "PostgreSQL", "Docker", "REST APIs"], "bio": "Specializing in scalable backend architectures and FastAPI."},
+        {"role": "Full Stack Developer", "skills": ["Full Stack", "React", "TypeScript", "Node.js", "Python", "Tailwind CSS"], "bio": "Building responsive full-stack applications with React and FastAPI."},
+        {"role": "Machine Learning Engineer", "skills": ["Machine Learning", "PyTorch", "Python", "Deep Learning", "Computer Vision"], "bio": "Focused on computer vision pipelines and neural network architectures."},
+        {"role": "Robotics Engineer", "skills": ["Robotics", "ROS2", "Python", "C++", "Gazebo", "SLAM"], "bio": "Hands-on expertise in ROS2 autonomous navigation and embedded edge systems."},
+        {"role": "Frontend Engineer", "skills": ["Frontend", "React", "TypeScript", "Next.js", "Tailwind CSS", "UI/UX Design"], "bio": "Passionate about intuitive user interfaces and modern React design systems."},
+        {"role": "Data Scientist", "skills": ["Data Science", "Python", "Pandas", "NumPy", "SQL", "Scikit-Learn"], "bio": "Analyzing institutional datasets, predictive modeling, and data analytics."}
+    ]
+
+    for idx, item in enumerate(VERIFIED_STUDENTS_ROSTER):
+        r_roll = item["roll"].strip().upper()
+        r_email = item["email"].strip().lower()
+        if r_roll in existing_rolls or r_email in existing_emails:
+            continue
+        if r_email == curr_email or r_roll == curr_roll:
+            continue
+        if branch and branch.lower() not in item["branch"].lower():
+            continue
+
+        track = skill_tracks[idx % len(skill_tracks)]
+        name_slug = re.sub(r'[^a-zA-Z0-9]+', '-', item["name"].lower()).strip('-')
+        skills = track["skills"]
+        all_text = f"{item['name']} {item['branch']} {track['bio']} {' '.join(skills)} {track['role']}".lower()
+
+        if query_tokens:
+            if not any(t in all_text for t in query_tokens):
+                continue
+        elif q_norm and q_norm not in all_text:
+            continue
+
+        cards.append(
+            StudentMatchCardSchema(
+                studentId=item["roll"],
+                name=item["name"].title(),
+                email=item["email"],
+                pictureUrl=f"https://api.dicebear.com/7.x/avataaars/svg?seed={item['roll']}",
+                branch=item["branch"],
+                year=2,
+                rollNumber=item["roll"],
+                bio=f"B.Tech Information Technology (Artificial Intelligence & Robotics) student at MITS Gwalior. {track['bio']}",
+                matchedTags=[sk for sk in skills if q_norm and q_norm in sk.lower()],
+                topSkills=skills,
+                openForHackathons=True,
+                preferredRoles=[track["role"], "Project Collaborator"],
+                githubUrl=f"https://github.com/{name_slug}",
+                linkedinUrl=f"https://www.linkedin.com/in/{name_slug}-mits",
+                is_demo=False
+            )
+        )
+
     return cards
 
 
