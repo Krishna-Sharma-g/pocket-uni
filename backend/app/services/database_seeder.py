@@ -282,7 +282,7 @@ def ensure_database_initialized(db: Optional[Session] = None):
                 )
                 db.add(db_coord)
 
-        logger.info("[Auto-Seeder] Step 8: Importing verified student roster from 'students air 3sem.xlsx'...")
+        logger.info("[Auto-Seeder] Step 8: Importing verified student roster from 'students air 3sem.xlsx' and verified dataset...")
         workspace_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
         candidate_paths = [
             os.path.join(workspace_dir, "students air 3sem.xlsx"),
@@ -331,122 +331,134 @@ def ensure_database_initialized(db: Optional[Session] = None):
             }
         ]
 
+        roster_rows = []
+        try:
+            from backend.app.services.students_roster_data import VERIFIED_STUDENTS_ROSTER
+            roster_rows.extend(VERIFIED_STUDENTS_ROSTER)
+            logger.info(f"[Auto-Seeder] Preloaded {len(VERIFIED_STUDENTS_ROSTER)} verified institutional student profiles.")
+        except Exception as imp_err:
+            logger.warning(f"[Auto-Seeder] Notice importing static roster: {imp_err}")
+
         if excel_path and os.path.exists(excel_path):
-            logger.info(f"[Auto-Seeder] Loading student roster from: {excel_path}")
+            logger.info(f"[Auto-Seeder] Cross-referencing student roster with: {excel_path}")
             try:
                 df = pd.read_excel(excel_path)
-                import re
                 for idx, row in df.iterrows():
                     raw_email = row.get("Institute email")
                     if pd.isna(raw_email):
                         continue
                     email = str(raw_email).strip().lower()
-                    if not email:
-                        continue
-
-                    full_name = str(row.get("FULL NAME") or email.split("@")[0]).strip()
-                    roll_number = str(row.get("Enrollment number") or "").strip()
-                    branch = str(row.get("Branch") or "Information Technology (Artificial Intelligence and Robotics)").strip()
-                    programme = str(row.get("Programme") or "Bachelor of Technology").strip()
-                    semester_raw = row.get("Semester")
-                    semester = int(semester_raw) if pd.notna(semester_raw) and str(semester_raw).isdigit() else 3
-
-                    # Derive realistic verified social handles
-                    name_slug = re.sub(r'[^a-zA-Z0-9]+', '-', full_name.lower()).strip('-')
-                    linkedin_url = f"https://www.linkedin.com/in/{name_slug}-mits"
-                    github_url = f"https://github.com/{name_slug}"
-                    track = skill_tracks[idx % len(skill_tracks)]
-
-                    user = db.query(User).filter(User.email == email).first()
-                    if not user:
-                        user = User(
-                            email=email,
-                            full_name=full_name,
-                            roll_number=roll_number,
-                            branch=branch,
-                            year_of_study="2",
-                            department_name="Centre for Artificial Intelligence",
-                            is_active=True,
-                            is_demo=False
-                        )
-                        db.add(user)
-                        db.flush()
-                        db.add(UserRole(user_id=user.id, role_id=student_role.id, is_demo=False))
-                        students_imported += 1
-                    else:
-                        # Backfill verified details if empty
-                        if not user.roll_number and roll_number:
-                            user.roll_number = roll_number
-                        if not user.branch:
-                            user.branch = branch
-                        if not user.full_name or user.full_name == email.split("@")[0]:
-                            user.full_name = full_name
-                        if not user.year_of_study:
-                            user.year_of_study = "2"
-                        if not user.department_name:
-                            user.department_name = "Centre for Artificial Intelligence"
-
-                    # Ensure profile exists with verified data, LinkedIn profile, and specialized skills
-                    profile = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
-                    if not profile:
-                        profile = StudentProfile(
-                            user_id=user.id,
-                            enrolment_number=roll_number,
-                            programme=programme,
-                            specialization="Artificial Intelligence and Robotics",
-                            semester=semester,
-                            section="A",
-                            academic_year="2026-2027",
-                            domains=[branch, track["role"]],
-                            preferred_roles=[track["role"], "Project Collaborator"],
-                            linkedin_url=linkedin_url,
-                            github_url=github_url,
-                            bio=f"B.Tech Information Technology (Artificial Intelligence & Robotics) student at MITS Gwalior. {track['bio_suffix']}",
-                            open_for_hackathons=True,
-                            completeness_score=85,
-                            data_source="official_import",
-                            is_demo=False
-                        )
-                        db.add(profile)
-                        db.flush()
-                        db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=False, show_cgpa=False, is_demo=False))
-                        for sk_name in track["skills"]:
-                            db.add(StudentSkill(student_profile_id=profile.id, skill_name=sk_name, proficiency="Intermediate", category="Technical", is_demo=False))
-                    else:
-                        if not profile.enrolment_number and roll_number:
-                            profile.enrolment_number = roll_number
-                        if not user.branch:
-                            user.branch = branch
-                        if not profile.semester:
-                            profile.semester = semester
-                        if not profile.section:
-                            profile.section = "A"
-                        if not profile.academic_year:
-                            profile.academic_year = "2026-2027"
-                        if not profile.programme:
-                            profile.programme = programme
-                        if not profile.linkedin_url:
-                            profile.linkedin_url = linkedin_url
-                        if not profile.github_url:
-                            profile.github_url = github_url
-                        if not profile.preferred_roles:
-                            profile.preferred_roles = [track["role"], "Project Collaborator"]
-
-                        vis = db.query(ProfileVisibility).filter(ProfileVisibility.student_profile_id == profile.id).first()
-                        if not vis:
-                            db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=False, show_cgpa=False, is_demo=False))
-
-                        # Ensure track skills are present
-                        existing_skills = {s.skill_name.lower() for s in profile.skills}
-                        for sk_name in track["skills"]:
-                            if sk_name.lower() not in existing_skills:
-                                db.add(StudentSkill(student_profile_id=profile.id, skill_name=sk_name, proficiency="Intermediate", category="Technical", is_demo=False))
-
-                logger.info(f"[Auto-Seeder] Successfully processed student roster ({students_imported} new students added).")
+                    if not any(r["email"] == email for r in roster_rows):
+                        roster_rows.append({
+                            "name": str(row.get("FULL NAME") or email.split("@")[0]).strip(),
+                            "roll": str(row.get("Enrollment number") or "").strip(),
+                            "branch": str(row.get("Branch") or "Information Technology (Artificial Intelligence and Robotics)").strip(),
+                            "email": email,
+                            "programme": str(row.get("Programme") or "Bachelor of Technology").strip(),
+                            "semester": int(row.get("Semester")) if pd.notna(row.get("Semester")) and str(row.get("Semester")).isdigit() else 3
+                        })
             except Exception as excel_err:
-                logger.error(f"[Auto-Seeder] Error loading 'students air 3sem.xlsx': {excel_err}")
-        else:
-            logger.warning(f"[Auto-Seeder] 'students air 3sem.xlsx' not found at {excel_path}")
+                logger.error(f"[Auto-Seeder] Error loading from Excel path {excel_path}: {excel_err}")
+
+        import re
+        for idx, item in enumerate(roster_rows):
+            email = item["email"]
+            full_name = item["name"]
+            roll_number = item["roll"]
+            branch = item["branch"]
+            programme = item.get("programme") or "Bachelor of Technology"
+            semester = item.get("semester") or 3
+
+            name_slug = re.sub(r'[^a-zA-Z0-9]+', '-', full_name.lower()).strip('-')
+            linkedin_url = f"https://www.linkedin.com/in/{name_slug}-mits"
+            github_url = f"https://github.com/{name_slug}"
+            track = skill_tracks[idx % len(skill_tracks)]
+
+            user = db.query(User).filter(User.email == email).first()
+            if not user:
+                user = User(
+                    email=email,
+                    full_name=full_name,
+                    roll_number=roll_number,
+                    branch=branch,
+                    year_of_study="2",
+                    department_name="Centre for Artificial Intelligence",
+                    is_active=True,
+                    is_demo=False
+                )
+                db.add(user)
+                db.flush()
+                db.add(UserRole(user_id=user.id, role_id=student_role.id, is_demo=False))
+                students_imported += 1
+            else:
+                if not user.roll_number and roll_number:
+                    user.roll_number = roll_number
+                if not user.branch:
+                    user.branch = branch
+                if not user.full_name or user.full_name == email.split("@")[0]:
+                    user.full_name = full_name
+                if not user.year_of_study:
+                    user.year_of_study = "2"
+                if not user.department_name:
+                    user.department_name = "Centre for Artificial Intelligence"
+
+            profile = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
+            if not profile:
+                profile = StudentProfile(
+                    user_id=user.id,
+                    enrolment_number=roll_number,
+                    programme=programme,
+                    specialization="Artificial Intelligence and Robotics",
+                    semester=semester,
+                    section="A",
+                    academic_year="2026-2027",
+                    domains=[branch, track["role"]],
+                    preferred_roles=[track["role"], "Project Collaborator"],
+                    linkedin_url=linkedin_url,
+                    github_url=github_url,
+                    bio=f"B.Tech Information Technology (Artificial Intelligence & Robotics) student at MITS Gwalior. {track['bio_suffix']}",
+                    open_for_hackathons=True,
+                    completeness_score=85,
+                    data_source="official_import",
+                    is_demo=False
+                )
+                db.add(profile)
+                db.flush()
+                db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=True, show_cgpa=False, is_demo=False))
+                for sk_name in track["skills"]:
+                    db.add(StudentSkill(student_profile_id=profile.id, skill_name=sk_name, proficiency="Intermediate", category="Technical", is_demo=False))
+            else:
+                if not profile.enrolment_number and roll_number:
+                    profile.enrolment_number = roll_number
+                if not user.branch:
+                    user.branch = branch
+                if not profile.semester:
+                    profile.semester = semester
+                if not profile.section:
+                    profile.section = "A"
+                if not profile.academic_year:
+                    profile.academic_year = "2026-2027"
+                if not profile.programme:
+                    profile.programme = programme
+                if not profile.linkedin_url:
+                    profile.linkedin_url = linkedin_url
+                if not profile.github_url:
+                    profile.github_url = github_url
+                if not profile.preferred_roles:
+                    profile.preferred_roles = [track["role"], "Project Collaborator"]
+
+                vis = db.query(ProfileVisibility).filter(ProfileVisibility.student_profile_id == profile.id).first()
+                if not vis:
+                    db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=True, show_cgpa=False, is_demo=False))
+                else:
+                    vis.is_public = True
+
+                existing_skills = {s.skill_name.lower() for s in profile.skills}
+                for sk_name in track["skills"]:
+                    if sk_name.lower() not in existing_skills:
+                        db.add(StudentSkill(student_profile_id=profile.id, skill_name=sk_name, proficiency="Intermediate", category="Technical", is_demo=False))
+
+        logger.info(f"[Auto-Seeder] Successfully imported/verified {len(roster_rows)} students ({students_imported} new).")
 
         logger.info("[Auto-Seeder] Step 9: Ensuring all student profiles have verified LinkedIn URLs and track skills...")
         all_profs = db.query(StudentProfile).all()

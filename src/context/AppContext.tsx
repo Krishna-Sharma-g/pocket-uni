@@ -901,7 +901,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 });
               },
               onDone: (info) => {
-                if (info?.messageId) {
+                if (!streamedText.trim()) {
+                  // Fallback if stream delivered no delta tokens
+                  apiClient.sendChatMessageV1(convId, text).then(res => {
+                    const asst = res.assistantMessage;
+                    setMessagesMap(prev => {
+                      const msgs = prev[convId] || [];
+                      return {
+                        ...prev,
+                        [convId]: msgs.map(m => m.id === asstMsgId ? {
+                          ...m,
+                          id: asst.id,
+                          content: asst.content,
+                          sources: asst.sources || [],
+                          widget: asst.widget || undefined,
+                          profileCards: asst.profileCards || undefined
+                        } : m)
+                      };
+                    });
+                  }).catch(() => {});
+                } else if (info?.messageId) {
                   setMessagesMap(prev => {
                     const msgs = prev[convId] || [];
                     return {
@@ -926,7 +945,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         id: asst.id,
                         content: asst.content,
                         sources: asst.sources || [],
-                        widget: asst.widget || undefined
+                        widget: asst.widget || undefined,
+                        profileCards: asst.profileCards || undefined
                       } : m)
                     };
                   });

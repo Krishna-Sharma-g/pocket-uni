@@ -279,7 +279,11 @@ async def stream_message(
     db: Session = Depends(get_db)
 ):
     """Server-Sent Events (SSE) progressive streaming endpoint with grounding and conversation persistence."""
+    import logging
     from backend.app.services.intent_router import intent_router
+    from backend.app.core.database import SessionLocal
+
+    stream_logger = logging.getLogger("pocketuni.chat.stream")
 
     text_input = (query or content or "").strip()
     if not text_input:
@@ -293,7 +297,7 @@ async def stream_message(
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found.")
 
-    # 1. Record user message in DB
+    # 1. Record user message in DB and commit immediately before streaming
     user_msg = Message(
         conversation_id=conv.id,
         role="user",
@@ -301,7 +305,8 @@ async def stream_message(
         content_type="text"
     )
     db.add(user_msg)
-    db.flush()
+    conv.last_message_at = datetime.now(timezone.utc)
+    db.commit()
 
     # 2. Fetch past conversation turns for grounding memory
     past_messages = db.query(Message).filter(
@@ -314,113 +319,133 @@ async def stream_message(
     # 3. Check for specialized intent (timetable, faculty availability, student profile, official links)
     intent_res = intent_router.route_query(db, text_input, current_user, conversation_history)
 
+    # Pre-extract user academic context and RAG sources while endpoint session is active
+    academic_context_str = get_user_academic_context(db, current_user)
+    retrieval_sources = []
+    if not intent_res:
+        retrieval_query = rag_service.build_retrieval_query(text_input, conversation_history)
+        retrieval_sources = rag_service.search_knowledge(db, retrieval_query, current_user, limit=4)
+
+    target_conv_id = str(conv.id)
+
     async def event_generator():
-        # Handle specialized deterministic institutional intent first
-        if intent_res:
-            citations = intent_res.get("citations", [])
+        # Dedicated DB session for streaming worker thread — never relies on outer closed session
+        stream_db = SessionLocal()
+        try:
+            # Handle specialized deterministic institutional intent first
+            if intent_res:
+                citations = intent_res.get("citations", [])
+                yield f"event: citations\ndata: {json.dumps(citations)}\n\n"
+                if intent_res.get("widget"):
+                    yield f"event: widget\ndata: {json.dumps(intent_res['widget'])}\n\n"
+
+                # Stream the authoritative answer
+                full_text = intent_res["answer"]
+                words = full_text.split(" ")
+                for i in range(0, len(words), 3):
+                    chunk = " ".join(words[i:i+3]) + (" " if i + 3 < len(words) else "")
+                    yield f"event: delta\ndata: {json.dumps({'text': chunk})}\n\n"
+
+                # Persist assistant message safely in stream_db
+                assistant_msg = Message(
+                    conversation_id=target_conv_id,
+                    role="assistant",
+                    content=full_text,
+                    content_type="profile_cards" if intent_res.get("profileCards") else "text",
+                    sources=citations,
+                    profile_cards=intent_res.get("profileCards") or []
+                )
+                stream_db.add(assistant_msg)
+                c_record = stream_db.query(Conversation).filter(Conversation.id == target_conv_id).first()
+                if c_record:
+                    c_record.last_message_at = datetime.now(timezone.utc)
+                stream_db.commit()
+
+                yield f"event: done\ndata: {json.dumps({'status': 'completed', 'messageId': assistant_msg.id})}\n\n"
+                return
+
+            # Non-intent RAG generation
+            citations = [
+                {
+                    "title": s["title"],
+                    "sourceUrl": s.get("source_url"),
+                    "category": s["category"],
+                    "page": s["page_number"],
+                    "section": s["section"],
+                    "score": s["score"],
+                    "snippet": s["text"][:160] + "..."
+                }
+                for s in retrieval_sources
+            ]
+
             yield f"event: citations\ndata: {json.dumps(citations)}\n\n"
-            if intent_res.get("widget"):
-                yield f"event: widget\ndata: {json.dumps(intent_res['widget'])}\n\n"
 
-            # Stream the authoritative answer
-            full_text = intent_res["answer"]
-            # Chunk the response slightly for progressive typing illusion
-            words = full_text.split(" ")
-            for i in range(0, len(words), 3):
-                chunk = " ".join(words[i:i+3]) + (" " if i + 3 < len(words) else "")
-                yield f"event: delta\ndata: {json.dumps({'text': chunk})}\n\n"
-
-            # Persist assistant message
-            assistant_msg = Message(
-                conversation_id=conv.id,
-                role="assistant",
-                content=full_text,
-                content_type="profile_cards" if intent_res.get("profileCards") else "text",
-                sources=citations,
-                profile_cards=intent_res.get("profileCards") or []
+            context_parts = [
+                f"Source ({s['title']}, Page {s['page_number']}, Section {s['section']}, URL {s.get('source_url') or 'not available'}):\n{s['text']}"
+                for s in retrieval_sources
+            ]
+            context_text = "\n\n".join(context_parts) if context_parts else "No relevant documents found."
+            history_text = "\n".join(
+                f"{'User' if message['role'] == 'user' else 'Assistant'}: {message['content']}"
+                for message in conversation_history
             )
-            db.add(assistant_msg)
-            conv.last_message_at = datetime.now(timezone.utc)
-            db.commit()
+            prompt = (
+                f"=== Verified Student Details (Context) ===\n"
+                f"{academic_context_str}\n"
+                f"==========================================\n\n"
+                f"Recent conversation:\n{history_text or 'This is the start of the conversation.'}\n\n"
+                f"Institutional Context:\n{context_text}\n\n"
+                f"Current user message: {text_input}\n\n"
+                "Respond to the current message naturally, directly, and helpfully. When the student asks about their "
+                "schedule, timetable, classes, branch, or verified records without repeating their branch/semester, "
+                "always ground your answer in their verified student details above."
+            )
+
+            full_content = []
+            if gemini_service.is_configured():
+                async for token in gemini_service.generate_stream(prompt, system_instruction=SYSTEM_PROMPT):
+                    full_content.append(token)
+                    yield f"event: delta\ndata: {json.dumps({'text': token})}\n\n"
+            elif retrieval_sources:
+                fallback_parts = ["I found relevant information in these MITS sources:"]
+                fallback_parts.extend(
+                    f"**{source['title']} (Page {source['page_number']})**\n"
+                    f"[Open official source]({source.get('source_url')})\n{source['text'][:700]}"
+                    for source in retrieval_sources[:3]
+                )
+                fallback_answer = "\n\n".join(fallback_parts)
+                for start in range(0, len(fallback_answer), 80):
+                    token = fallback_answer[start:start + 80]
+                    full_content.append(token)
+                    yield f"event: delta\ndata: {json.dumps({'text': token})}\n\n"
+            else:
+                fallback_answer = "I couldn't find a verified MITS source for that yet. Which course, semester, or campus service do you mean?"
+                full_content.append(fallback_answer)
+                yield f"event: delta\ndata: {json.dumps({'text': fallback_answer})}\n\n"
+
+            complete_answer = "".join(full_content)
+            assistant_msg = Message(
+                conversation_id=target_conv_id,
+                role="assistant",
+                content=complete_answer,
+                content_type="text",
+                sources=citations
+            )
+            stream_db.add(assistant_msg)
+            c_record = stream_db.query(Conversation).filter(Conversation.id == target_conv_id).first()
+            if c_record:
+                c_record.last_message_at = datetime.now(timezone.utc)
+            stream_db.commit()
 
             yield f"event: done\ndata: {json.dumps({'status': 'completed', 'messageId': assistant_msg.id})}\n\n"
-            return
 
-        # 4. Retrieve sources from institutional knowledge base
-        retrieval_query = rag_service.build_retrieval_query(text_input, conversation_history)
-        sources = rag_service.search_knowledge(db, retrieval_query, current_user, limit=4)
-        citations = [
-            {
-                "title": s["title"],
-                "sourceUrl": s.get("source_url"),
-                "category": s["category"],
-                "page": s["page_number"],
-                "section": s["section"],
-                "score": s["score"],
-                "snippet": s["text"][:160] + "..."
-            }
-            for s in sources
-        ]
+        except Exception as e:
+            stream_logger.error(f"Error in SSE event_generator: {e}", exc_info=True)
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+        finally:
+            stream_db.close()
 
-        yield f"event: citations\ndata: {json.dumps(citations)}\n\n"
-
-        context_parts = [
-            f"Source ({s['title']}, Page {s['page_number']}, Section {s['section']}, URL {s.get('source_url') or 'not available'}):\n{s['text']}"
-            for s in sources
-        ]
-        context_text = "\n\n".join(context_parts) if context_parts else "No relevant documents found."
-        history_text = "\n".join(
-            f"{'User' if message['role'] == 'user' else 'Assistant'}: {message['content']}"
-            for message in conversation_history
-        )
-        user_context_str = get_user_academic_context(db, current_user)
-        prompt = (
-            f"=== Verified Student Details (Context) ===\n"
-            f"{user_context_str}\n"
-            f"==========================================\n\n"
-            f"Recent conversation:\n{history_text or 'This is the start of the conversation.'}\n\n"
-            f"Institutional Context:\n{context_text}\n\n"
-            f"Current user message: {text_input}\n\n"
-            "Respond to the current message naturally, directly, and helpfully. When the student asks about their "
-            "schedule, timetable, classes, branch, or verified records without repeating their branch/semester, "
-            "always ground your answer in their verified student details above."
-        )
-
-        full_content = []
-        if gemini_service.is_configured():
-            async for token in gemini_service.generate_stream(prompt, system_instruction=SYSTEM_PROMPT):
-                full_content.append(token)
-                yield f"event: delta\ndata: {json.dumps({'text': token})}\n\n"
-        elif sources:
-            fallback_parts = ["I found relevant information in these MITS sources:"]
-            fallback_parts.extend(
-                f"**{source['title']} (Page {source['page_number']})**\n"
-                f"[Open official source]({source.get('source_url')})\n{source['text'][:700]}"
-                for source in sources[:3]
-            )
-            fallback_answer = "\n\n".join(fallback_parts)
-            for start in range(0, len(fallback_answer), 80):
-                token = fallback_answer[start:start + 80]
-                full_content.append(token)
-                yield f"event: delta\ndata: {json.dumps({'text': token})}\n\n"
-        else:
-            fallback_answer = "I couldn't find a verified MITS source for that yet. Which course, semester, or campus service do you mean?"
-            full_content.append(fallback_answer)
-            yield f"event: delta\ndata: {json.dumps({'text': fallback_answer})}\n\n"
-
-        complete_answer = "".join(full_content)
-        assistant_msg = Message(
-            conversation_id=conv.id,
-            role="assistant",
-            content=complete_answer,
-            content_type="text",
-            sources=citations
-        )
-        db.add(assistant_msg)
-        conv.last_message_at = datetime.now(timezone.utc)
-        db.commit()
-
-        yield f"event: done\ndata: {json.dumps({'status': 'completed', 'messageId': assistant_msg.id})}\n\n"
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

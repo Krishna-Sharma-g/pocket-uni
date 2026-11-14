@@ -199,23 +199,29 @@ export const ChatView: React.FC = () => {
                     </div>
 
                     {/* Discovery Profile Cards */}
-                    {((msg.profileCards && msg.profileCards.length > 0) || (msg.widget && msg.widget.type === 'STUDENT_DISCOVERY_CARDS')) && (
-                      <div className="pt-2">
-                        <div className="flex items-center gap-2 mb-2.5 text-xs font-semibold text-white/80 uppercase tracking-wider">
-                          <Users className="w-4 h-4 text-emerald-400" />
-                          <span>Matched Student Profiles</span>
+                    {(() => {
+                      const cards = (msg.profileCards && msg.profileCards.length > 0)
+                        ? msg.profileCards
+                        : (msg.widget?.type === 'STUDENT_DISCOVERY_CARDS' && Array.isArray(msg.widget?.data) ? msg.widget.data : []);
+                      if (cards.length === 0) return null;
+                      return (
+                        <div className="pt-2">
+                          <div className="flex items-center gap-2 mb-2.5 text-xs font-semibold text-white/80 uppercase tracking-wider">
+                            <Users className="w-4 h-4 text-emerald-400" />
+                            <span>Matched Student Profiles ({cards.length})</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {cards.map((card: any) => (
+                              <StudentCard
+                                key={card.studentId}
+                                student={card}
+                                onViewProfile={() => setPreviewStudentCard(card)}
+                              />
+                            ))}
+                          </div>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {(msg.profileCards && msg.profileCards.length > 0 ? msg.profileCards : (msg.widget?.data || [])).map((card: any) => (
-                            <StudentCard
-                              key={card.studentId}
-                              student={card}
-                              onViewProfile={() => setPreviewStudentCard(card)}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Interactive Institutional Widgets */}
                     {msg.widget && msg.widget.type === 'TIMETABLE_CARD' && (

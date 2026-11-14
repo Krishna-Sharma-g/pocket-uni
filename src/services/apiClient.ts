@@ -443,6 +443,9 @@ class ApiClient {
         const decoder = new TextDecoder();
         let buffer = '';
 
+        let doneReceived = false;
+        let hasReceivedContent = false;
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -463,10 +466,25 @@ class ApiClient {
               const data = JSON.parse(dataStr);
               if (event === 'citations') callbacks.onCitations?.(data);
               else if (event === 'widget') callbacks.onWidget?.(data);
-              else if (event === 'delta') callbacks.onDelta?.(data.text);
-              else if (event === 'done') callbacks.onDone?.(data);
-            } catch (_) {}
+              else if (event === 'delta') {
+                hasReceivedContent = true;
+                callbacks.onDelta?.(data.text);
+              }
+              else if (event === 'done') {
+                doneReceived = true;
+                callbacks.onDone?.(data);
+              }
+              else if (event === 'error') {
+                throw new Error(data.error || 'Server error during streaming');
+              }
+            } catch (parseErr) {
+              if (event === 'error') throw parseErr;
+            }
           }
+        }
+
+        if (!doneReceived && !hasReceivedContent) {
+          throw new Error('SSE stream terminated prematurely before receiving completion or content.');
         }
       })
       .catch((err) => {
