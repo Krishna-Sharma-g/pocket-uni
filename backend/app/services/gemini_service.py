@@ -27,6 +27,7 @@ class GeminiService:
         self.groq_api_key = getattr(settings, "GROQ_API_KEY", "")
         self.groq_model = getattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile")
         self._client = None
+        self._gemini_blocked = False
 
     def _get_client(self):
         if self._client is None:
@@ -37,6 +38,8 @@ class GeminiService:
         return self._client
 
     def has_gemini(self) -> bool:
+        if self._gemini_blocked or (self.api_key and self.api_key.startswith("AQ.")):
+            return False
         return bool(self.enabled and self.api_key and len(self.api_key.strip()) > 8)
 
     def has_groq(self) -> bool:
@@ -181,6 +184,9 @@ class GeminiService:
                     return response.text
             except Exception as e:
                 logger.warning(f"Gemini generation failed: {e}. Checking Groq fallback...")
+                err_str = str(e).lower()
+                if "403" in err_str or "permission_denied" in err_str:
+                    self._gemini_blocked = True
                 if not self.has_groq():
                     err_str = str(e).lower()
                     if "403" in err_str or "permission_denied" in err_str:
@@ -257,6 +263,9 @@ class GeminiService:
                     return
             except Exception as e:
                 logger.warning(f"Gemini streaming exception: {e}")
+                err_str = str(e).lower()
+                if "403" in err_str or "permission_denied" in err_str:
+                    self._gemini_blocked = True
                 if not self.has_groq():
                     err_str = str(e).lower()
                     if "403" in err_str or "permission_denied" in err_str:
