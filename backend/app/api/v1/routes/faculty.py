@@ -399,6 +399,28 @@ def get_faculty_directory(
     return unified_list
 
 
+@router.get("/photo/file/{filename}")
+@router.get("/{faculty_id}/photo/file/{filename}")
+def serve_faculty_photo_file(filename: str, faculty_id: Optional[str] = None):
+    """Serves faculty photos stored in backend storage."""
+    clean_name = os.path.basename(filename)
+    if clean_name != filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid photo filename.")
+
+    fpath = os.path.abspath(os.path.join(FACULTY_PHOTOS_DIR, clean_name))
+    if not fpath.startswith(FACULTY_PHOTOS_DIR) or not os.path.exists(fpath):
+        # Fallback to avatar directory if present
+        avatar_dir = os.path.abspath(os.path.join(settings.STORAGE_DIR, "avatars"))
+        fpath_avatar = os.path.join(avatar_dir, clean_name)
+        if os.path.exists(fpath_avatar):
+            mime, _ = mimetypes.guess_type(fpath_avatar)
+            return FileResponse(fpath_avatar, media_type=mime or "image/png")
+        raise HTTPException(status_code=404, detail="Photo file not found.")
+
+    mime_type, _ = mimetypes.guess_type(fpath)
+    return FileResponse(fpath, media_type=mime_type or "image/png")
+
+
 @router.get("/{faculty_id}/timetable")
 def get_faculty_timetable_endpoint(
     faculty_id: str,
@@ -623,24 +645,3 @@ def delete_faculty_photo(
         "message": "Faculty photo removed successfully."
     }
 
-
-@router.get("/photo/file/{filename}")
-@router.get("/{faculty_id}/photo/file/{filename}")
-def serve_faculty_photo_file(filename: str, faculty_id: Optional[str] = None):
-    """Serves faculty photos stored in backend storage."""
-    clean_name = os.path.basename(filename)
-    if clean_name != filename or ".." in filename:
-        raise HTTPException(status_code=400, detail="Invalid photo filename.")
-
-    fpath = os.path.abspath(os.path.join(FACULTY_PHOTOS_DIR, clean_name))
-    if not fpath.startswith(FACULTY_PHOTOS_DIR) or not os.path.exists(fpath):
-        # Fallback to avatar directory if present
-        avatar_dir = os.path.abspath(os.path.join(settings.STORAGE_DIR, "avatars"))
-        fpath_avatar = os.path.join(avatar_dir, clean_name)
-        if os.path.exists(fpath_avatar):
-            mime, _ = mimetypes.guess_type(fpath_avatar)
-            return FileResponse(fpath_avatar, media_type=mime or "image/png")
-        raise HTTPException(status_code=404, detail="Photo file not found.")
-
-    mime_type, _ = mimetypes.guess_type(fpath)
-    return FileResponse(fpath, media_type=mime_type or "image/png")

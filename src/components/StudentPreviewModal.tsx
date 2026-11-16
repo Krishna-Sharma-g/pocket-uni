@@ -92,10 +92,10 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
   const academicUser: User = {
     id: studentId,
     googleSub: userObj?.googleSub || `google-${studentId}`,
-    email,
+    email: email || 'student@mitsgwl.ac.in',
     role: 'student',
     fullName: name,
-    pictureUrl,
+    pictureUrl: pictureUrl || '',
     isActive: true,
     lastLoginAt: userObj?.lastLoginAt || new Date().toISOString(),
     rollNumber,

@@ -246,7 +246,7 @@ export const StudentProfileView: FC = () => {
         domains: [primaryDomain],
         skills,
         techStack: skills.map((s: any) => s.name),
-        interests: p?.interests || (primaryDomain ? [primaryDomain] : []),
+        interests: (currentStudentProfile as any)?.interests || (primaryDomain ? [primaryDomain] : []),
         professionalExperiences,
         resumeFileName,
         resumeFileSize,

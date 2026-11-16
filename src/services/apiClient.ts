@@ -1,4 +1,18 @@
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api/v1';
+const getApiBaseUrl = (): string => {
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    return envUrl.trim();
+  }
+  if (typeof window !== 'undefined' && window.location) {
+    const origin = window.location.origin;
+    if (origin && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
+      return `${origin}/api/v1`;
+    }
+  }
+  return 'http://localhost:8000/api/v1';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 class ApiClient {
   private token: string | null = null;
@@ -178,26 +192,26 @@ class ApiClient {
   }
 
   public async getFacultyProfile(facultyId: string) {
-    return this.request<any>(`/faculty/${facultyId}`);
+    return this.request<any>(`/faculty/${encodeURIComponent(facultyId)}`);
   }
 
   public async getFacultyTimetable(facultyId: string, day?: string) {
     const params = new URLSearchParams();
     if (day) params.append('day', day);
-    return this.request<any>(`/faculty/${facultyId}/timetable?${params.toString()}`);
+    return this.request<any>(`/faculty/${encodeURIComponent(facultyId)}/timetable?${params.toString()}`);
   }
 
   public async uploadFacultyPhoto(facultyId: string, file: File) {
     const formData = new FormData();
     formData.append('file', file);
-    return this.request<any>(`/faculty/${facultyId}/photo`, {
+    return this.request<any>(`/faculty/${encodeURIComponent(facultyId)}/photo`, {
       method: 'POST',
       body: formData,
     });
   }
 
   public async deleteFacultyPhoto(facultyId: string) {
-    return this.request<any>(`/faculty/${facultyId}/photo`, {
+    return this.request<any>(`/faculty/${encodeURIComponent(facultyId)}/photo`, {
       method: 'DELETE',
     });
   }

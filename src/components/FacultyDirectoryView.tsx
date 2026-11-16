@@ -10,8 +10,8 @@ export const FacultyDirectoryView: FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All');
-  const [facultyList, setFacultyList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [facultyList, setFacultyList] = useState<any[]>(() => searchFaculty('', 'All'));
+  const [loading, setLoading] = useState(false);
 
   const departments = [
     { label: 'All Departments', value: 'All' },
@@ -23,7 +23,6 @@ export const FacultyDirectoryView: FC = () => {
   // Load faculty from backend with fallback to robust local dataset
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
 
     const deptParam = departmentFilter === 'All' ? undefined : departmentFilter;
     const searchParam = searchQuery.trim() || undefined;
@@ -84,8 +83,10 @@ export const FacultyDirectoryView: FC = () => {
   }, [searchQuery, departmentFilter]);
 
   const handleSelectFaculty = async (fac: any) => {
+    if (!fac) return;
     try {
-      const full = await apiClient.getFacultyProfile(fac.code || fac.facultyId || fac.name);
+      const lookup = encodeURIComponent(fac.code || fac.facultyId || fac.name);
+      const full = await apiClient.getFacultyProfile(lookup);
       if (full) {
         setSelectedFaculty({
           facultyId: full.facultyId || fac.facultyId,
@@ -184,7 +185,14 @@ export const FacultyDirectoryView: FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-            {facultyList.map((fac: any) => {
+            {facultyList.map((fac: any, idx: number) => {
+              if (!fac) return null;
+              const fId = fac.facultyId || fac.id || `fac-${idx}`;
+              const fName = fac.name || 'Faculty Member';
+              const fDesig = fac.designation || 'Faculty';
+              const fDept = fac.department || 'Centre for Artificial Intelligence';
+              const fPhoto = fac.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80';
+
               // Safe extraction of research areas
               const areas: string[] = Array.isArray(fac.researchAreas)
                 ? fac.researchAreas
@@ -203,7 +211,7 @@ export const FacultyDirectoryView: FC = () => {
 
               return (
                 <div
-                  key={fac.facultyId}
+                  key={fId}
                   onClick={() => handleSelectFaculty(fac)}
                   className="bg-[#12161A]/85 backdrop-blur-xl rounded-2xl border border-white/10 p-5 shadow-[0_15px_35px_rgba(0,0,0,0.3)] hover:shadow-[0_20px_45px_rgba(0,0,0,0.4)] hover:border-white/20 transition-all cursor-pointer group text-left flex flex-col justify-between"
                 >
@@ -212,8 +220,8 @@ export const FacultyDirectoryView: FC = () => {
                     <div className="flex items-start gap-3.5">
                       <div className="relative shrink-0">
                         <img
-                          src={fac.photoUrl}
-                          alt={fac.name}
+                          src={fPhoto}
+                          alt={fName}
                           onError={(e: any) => {
                             (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80';
                           }}
@@ -228,13 +236,13 @@ export const FacultyDirectoryView: FC = () => {
 
                       <div className="space-y-0.5 min-w-0 flex-1">
                         <h3 className="font-heading font-semibold text-sm text-[#FAFAFA] group-hover:text-emerald-300 transition-colors truncate">
-                          {fac.name}
+                          {fName}
                         </h3>
                         <p className="text-xs font-medium text-emerald-400 truncate">
-                          {fac.designation}
+                          {fDesig}
                         </p>
                         <p className="text-[11px] text-white/60 truncate">
-                          {fac.department}
+                          {fDept}
                         </p>
                       </div>
                     </div>
