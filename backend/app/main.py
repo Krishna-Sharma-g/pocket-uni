@@ -62,7 +62,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Health endpoint
+# Root and Health endpoints
+@app.get("/", tags=["System"])
+@app.head("/", tags=["System"])
+def root_endpoint():
+    return {
+        "status": "ONLINE",
+        "service": "PocketUni Institutional API",
+        "institution": "Madhav Institute of Technology & Science (MITS), Gwalior",
+        "health": "/api/health",
+        "docs": "/docs"
+    }
+
 @app.get("/api/health", tags=["System"])
 def health_check():
     db_status = check_db_health()

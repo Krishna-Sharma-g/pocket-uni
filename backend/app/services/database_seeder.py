@@ -439,6 +439,7 @@ def ensure_database_initialized(db: Optional[Session] = None):
                 db.add(profile)
                 db.flush()
                 db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=True, show_cgpa=False, is_demo=False))
+                db.flush()
                 for sk_name in track["skills"]:
                     db.add(StudentSkill(student_profile_id=profile.id, skill_name=sk_name, proficiency="Intermediate", category="Technical", is_demo=False))
             else:
@@ -463,17 +464,22 @@ def ensure_database_initialized(db: Optional[Session] = None):
                 if not profile.preferred_roles:
                     profile.preferred_roles = [track["role"], "Project Collaborator"]
 
-                vis = db.query(ProfileVisibility).filter(ProfileVisibility.student_profile_id == profile.id).first()
-                if not vis:
-                    db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=True, show_cgpa=False, is_demo=False))
+                if not profile.visibility:
+                    vis = db.query(ProfileVisibility).filter(ProfileVisibility.student_profile_id == profile.id).first()
+                    if not vis:
+                        db.add(ProfileVisibility(student_profile_id=profile.id, is_public=True, show_contact=True, show_cgpa=False, is_demo=False))
+                        db.flush()
+                    else:
+                        vis.is_public = True
                 else:
-                    vis.is_public = True
+                    profile.visibility.is_public = True
 
                 existing_skills = {s.skill_name.lower() for s in profile.skills}
                 for sk_name in track["skills"]:
                     if sk_name.lower() not in existing_skills:
                         db.add(StudentSkill(student_profile_id=profile.id, skill_name=sk_name, proficiency="Intermediate", category="Technical", is_demo=False))
 
+        db.flush()
         logger.info(f"[Auto-Seeder] Successfully imported/verified {len(roster_rows)} students ({students_imported} new).")
 
         logger.info("[Auto-Seeder] Step 9: Ensuring all student profiles have verified LinkedIn URLs and track skills...")
@@ -504,9 +510,11 @@ def ensure_database_initialized(db: Optional[Session] = None):
                 if sk_name.lower() not in existing_skills:
                     db.add(StudentSkill(student_profile_id=sp.id, skill_name=sk_name, proficiency="Intermediate", category="Technical", is_demo=False))
 
-            vis = db.query(ProfileVisibility).filter(ProfileVisibility.student_profile_id == sp.id).first()
-            if not vis:
-                db.add(ProfileVisibility(student_profile_id=sp.id, is_public=True, show_contact=False, show_cgpa=False, is_demo=False))
+            if not sp.visibility:
+                vis = db.query(ProfileVisibility).filter(ProfileVisibility.student_profile_id == sp.id).first()
+                if not vis:
+                    db.add(ProfileVisibility(student_profile_id=sp.id, is_public=True, show_contact=True, show_cgpa=False, is_demo=False))
+                    db.flush()
 
         db.commit()
         logger.info("[Auto-Seeder] Database initialization completed successfully.")
