@@ -259,11 +259,12 @@ class CAIDocxIngestionService:
                 curr_fac["email"] = t.replace("E-Mail:", "").strip()
                 if "name" in curr_fac and curr_fac.get("email"):
                     # Process faculty member
-                    fname = curr_fac["name"]
-                    femail = curr_fac["email"].lower()
-                    fdesig = curr_fac.get("designation", "Assistant Professor")
-                    fqual = curr_fac.get("qualification", "Ph.D.")
-                    finterests = curr_fac.get("interests", "")
+                    fname = curr_fac["name"].strip()
+                    femail = curr_fac["email"].strip().lower()
+                    fdesig = curr_fac.get("designation", "Assistant Professor").strip()
+                    fdesig_safe = fdesig[:98] if len(fdesig) > 98 else fdesig
+                    fqual = curr_fac.get("qualification", "Ph.D.").strip()
+                    finterests = curr_fac.get("interests", "").strip()
 
                     user = db.query(User).filter(User.email == femail).first()
                     if not user:
@@ -272,7 +273,7 @@ class CAIDocxIngestionService:
                         user = User(
                             email=femail,
                             full_name=fname,
-                            designation=fdesig,
+                            designation=fdesig_safe,
                             department_name="Centre for Artificial Intelligence",
                             picture_url=None,  # No stock unsplash photos
                             is_active=True,
@@ -283,7 +284,7 @@ class CAIDocxIngestionService:
                         if role_faculty:
                             db.add(UserRole(user_id=user.id, role_id=role_faculty.id, is_demo=False))
                     else:
-                        user.designation = fdesig
+                        user.designation = fdesig_safe
                         user.department_name = "Centre for Artificial Intelligence"
                         if user.picture_url and "unsplash" in user.picture_url:
                             user.picture_url = None
@@ -295,7 +296,7 @@ class CAIDocxIngestionService:
                         fac_prof = FacultyProfile(
                             user_id=user.id,
                             name=fname,
-                            designation=fdesig,
+                            designation=fdesig_safe,
                             department="Centre for Artificial Intelligence",
                             qualification=fqual,
                             bio=f"{fname} is {fdesig} at the Centre for Artificial Intelligence, MITS Gwalior. Areas of focus: {finterests}.",
@@ -314,7 +315,7 @@ class CAIDocxIngestionService:
                         extracted_faculty_count += 1
                     else:
                         fac_prof.qualification = fqual
-                        fac_prof.designation = fdesig
+                        fac_prof.designation = fdesig_safe
                         fac_prof.email_public = femail
                         fac_prof.verification_status = "VERIFIED_OFFICIAL_SOURCE"
                         fac_prof.data_source = "official"
@@ -352,7 +353,7 @@ class CAIDocxIngestionService:
                         db.add(BoSMember(
                             department_id=dept_id,
                             name=b_name,
-                            designation=b_role,
+                            designation=b_role[:98] if b_role else "",
                             affiliation="MITS / External Academic Partner",
                             category="Chairman" if "Chairman" in b_role else "External",
                             is_demo=False,

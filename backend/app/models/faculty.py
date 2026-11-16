@@ -12,7 +12,7 @@ class FacultyProfile(Base, CommonMixin):
     # Institution-controlled fields
     faculty_identifier = Column(String(50), nullable=True, index=True)
     name = Column(String(255), nullable=False, index=True)
-    designation = Column(String(100), nullable=False)
+    designation = Column(String(255), nullable=False)
     department = Column(String(150), nullable=False, index=True)
     centre = Column(String(150), nullable=True)
     qualification = Column(String(255), nullable=True)

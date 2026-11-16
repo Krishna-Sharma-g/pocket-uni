@@ -140,6 +140,16 @@ def ensure_database_initialized(db: Optional[Session] = None):
         logger.info("[Auto-Seeder] Step 1: Ensuring all database tables exist...")
         Base.metadata.create_all(bind=engine)
 
+        # Auto-upgrade column lengths in PostgreSQL if existing schema has smaller limits
+        try:
+            from sqlalchemy import text
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE users ALTER COLUMN designation TYPE VARCHAR(255);"))
+                conn.execute(text("ALTER TABLE faculty_profiles ALTER COLUMN designation TYPE VARCHAR(255);"))
+                conn.commit()
+        except Exception:
+            pass
+
         logger.info("[Auto-Seeder] Step 2: Ensuring standard roles exist...")
         roles = {}
         for role_name, desc in [
@@ -216,6 +226,7 @@ def ensure_database_initialized(db: Optional[Session] = None):
         try:
             enrich_faculty_database(db)
         except Exception as fac_err:
+            db.rollback()
             logger.warning(f"[Auto-Seeder] Faculty enrichment notice: {fac_err}")
 
         logger.info("[Auto-Seeder] Step 5b: Ingesting Centre for AI primary docx data...")
@@ -230,6 +241,7 @@ def ensure_database_initialized(db: Optional[Session] = None):
             cai_ingestion = CAIDocxIngestionService(docx_path=cai_path)
             cai_ingestion.ingest(db)
         except Exception as docx_err:
+            db.rollback()
             logger.warning(f"[Auto-Seeder] Docx ingestion notice: {docx_err}")
 
         # Ensure zero unsplash stock avatars exist in production
@@ -240,6 +252,7 @@ def ensure_database_initialized(db: Optional[Session] = None):
         try:
             timetable_service.seed_master_timetables(db)
         except Exception as tt_err:
+            db.rollback()
             logger.warning(f"[Auto-Seeder] Timetable seeding notice: {tt_err}")
 
         logger.info("[Auto-Seeder] Step 7: Seeding laboratories and class coordinators...")

@@ -29,7 +29,7 @@ class User(Base, CommonMixin):
     branch = Column(String(100), nullable=True)
     year_of_study = Column(String(20), nullable=True)
     department_name = Column(String(100), nullable=True)
-    designation = Column(String(100), nullable=True)
+    designation = Column(String(255), nullable=True)
 
     # Relationships
     roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
