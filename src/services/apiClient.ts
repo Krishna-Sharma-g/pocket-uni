@@ -128,12 +128,45 @@ class ApiClient {
     });
   }
 
-  public async getStudentDiscovery(query?: string, branch?: string, hackathonsOnly?: boolean) {
+  public async getStudentDiscovery(
+    queryOrParams?: string | {
+      query?: string;
+      gender?: string;
+      branch?: string;
+      year?: string;
+      semester?: string;
+      domain?: string;
+      skill?: string;
+      experience?: string;
+      looking_for?: string;
+      availability?: string;
+      open_to?: string;
+      hackathons_only?: boolean;
+    },
+    branch?: string,
+    hackathonsOnly?: boolean
+  ) {
     const params = new URLSearchParams();
-    if (query) params.append('query', query);
-    if (branch) params.append('branch', branch);
-    if (hackathonsOnly) params.append('hackathons_only', 'true');
-    return this.request<any[]>(`/students/discovery?${params.toString()}`);
+    if (typeof queryOrParams === 'object' && queryOrParams !== null) {
+      if (queryOrParams.query) params.append('query', queryOrParams.query);
+      if (queryOrParams.gender && queryOrParams.gender !== 'All') params.append('gender', queryOrParams.gender);
+      if (queryOrParams.branch && queryOrParams.branch !== 'All') params.append('branch', queryOrParams.branch);
+      if (queryOrParams.year && queryOrParams.year !== 'All') params.append('year', queryOrParams.year);
+      if (queryOrParams.semester && queryOrParams.semester !== 'All') params.append('semester', queryOrParams.semester);
+      if (queryOrParams.domain && queryOrParams.domain !== 'All') params.append('domain', queryOrParams.domain);
+      if (queryOrParams.skill && queryOrParams.skill !== 'All') params.append('skill', queryOrParams.skill);
+      if (queryOrParams.experience && queryOrParams.experience !== 'All') params.append('experience', queryOrParams.experience);
+      if (queryOrParams.looking_for && queryOrParams.looking_for !== 'All') params.append('looking_for', queryOrParams.looking_for);
+      if (queryOrParams.availability && queryOrParams.availability !== 'All') params.append('availability', queryOrParams.availability);
+      if (queryOrParams.open_to && queryOrParams.open_to !== 'All') params.append('open_to', queryOrParams.open_to);
+      if (queryOrParams.hackathons_only) params.append('hackathons_only', 'true');
+    } else {
+      if (queryOrParams) params.append('query', queryOrParams);
+      if (branch) params.append('branch', branch);
+      if (hackathonsOnly) params.append('hackathons_only', 'true');
+    }
+    const qs = params.toString();
+    return this.request<any[]>(`/students/discovery${qs ? `?${qs}` : ''}`);
   }
 
   // Faculty

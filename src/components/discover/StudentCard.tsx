@@ -36,11 +36,12 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     ? student.profile.skills.map((s) => s.name).slice(0, 3)
     : student.topSkills?.slice(0, 3) || [];
 
-  // Match percentage (provided or deterministic mock 85-98%)
+  // Match percentage (personalized weighted similarity score)
   const percentage =
     matchPercentage ||
     ('matchPercentage' in student && student.matchPercentage) ||
-    (isStudentWithUser ? student.profile.completenessScore || 92 : 88);
+    (isStudentWithUser ? (student as StudentWithUser).profile.completenessScore : (student as StudentMatchCard).matchPercentage) ||
+    75;
 
   const formatBranch = (b: string) => {
     if (b.toLowerCase().includes('computer science')) return 'CSE';

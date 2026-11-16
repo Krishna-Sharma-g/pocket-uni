@@ -132,11 +132,16 @@ class GoogleOAuthService:
         user = db.query(User).filter(User.email == email).first()
 
         import re
-        from backend.app.services.students_roster_data import VERIFIED_STUDENTS_ROSTER
-        roster_match = next((s for s in VERIFIED_STUDENTS_ROSTER if s["email"].lower() == email.lower()), None)
+        from backend.app.services.students_roster_data import (
+            VERIFIED_STUDENTS_ROSTER,
+            VERIFIED_STUDENTS_DATA,
+            VERIFIED_BY_EMAIL,
+            VERIFIED_BY_ROLL
+        )
+        roster_match = VERIFIED_BY_EMAIL.get(email.lower().strip())
         name_roll_match = re.search(r"\b(BT[A-Z0-9]+)\b", full_name or "")
         if not roster_match and name_roll_match:
-            roster_match = next((s for s in VERIFIED_STUDENTS_ROSTER if s["roll"].upper() == name_roll_match.group(1).upper()), None)
+            roster_match = VERIFIED_BY_ROLL.get(name_roll_match.group(1).upper())
 
         matched_roll = roster_match["roll"] if roster_match else (name_roll_match.group(1).upper() if name_roll_match else email.split("@")[0].upper())
         matched_branch = roster_match["branch"] if roster_match else "Information Technology (Artificial Intelligence and Robotics)"
@@ -149,59 +154,137 @@ class GoogleOAuthService:
         if not user:
             # Check roster pre-registration requirement
             if effective_role == "STUDENT":
-                # Check student domain
                 default_branch = matched_branch
                 default_dept = "Centre for Artificial Intelligence"
                 default_roll = matched_roll
                 
-                user = User(
-                    email=email,
-                    full_name=full_name,
-                    picture_url=picture,
-                    google_sub=google_sub,
-                    roll_number=default_roll,
-                    branch=default_branch,
-                    year_of_study="2",
-                    department_name=default_dept,
-                    is_active=True,
-                    is_demo=False
-                )
-                db.add(user)
-                db.flush()
+                # Type 1: Verified dataset student - initialize with verified data, NO random values
+                if roster_match:
+                    user = User(
+                        email=email,
+                        full_name=roster_match.get("name") or full_name,
+                        picture_url=picture or roster_match.get("picture_url"),
+                        google_sub=google_sub,
+                        roll_number=default_roll,
+                        branch=default_branch,
+                        year_of_study=str(roster_match.get("year", 2)),
+                        department_name=default_dept,
+                        is_active=True,
+                        is_demo=False
+                    )
+                    db.add(user)
+                    db.flush()
 
-                # Assign STUDENT role
-                student_role = db.query(Role).filter(Role.name == "STUDENT").first()
-                if student_role:
-                    db.add(UserRole(user_id=user.id, role_id=student_role.id))
+                    student_role = db.query(Role).filter(Role.name == "STUDENT").first()
+                    if student_role:
+                        db.add(UserRole(user_id=user.id, role_id=student_role.id))
 
-                # Create default student profile shell if not present
-                profile = StudentProfile(
-                    user_id=user.id,
-                    enrolment_number=default_roll,
-                    programme="Bachelor of Technology",
-                    specialization="Artificial Intelligence and Robotics",
-                    batch="2024-2028",
-                    semester=3,
-                    section="A",
-                    academic_year="2026-2027",
-                    domains=[default_branch],
-                    bio="B.Tech Information Technology (Artificial Intelligence & Robotics) student at MITS Gwalior.",
-                    completeness_score=85,
-                    data_source="google_oauth_provisioned",
-                    is_demo=False
-                )
-                db.add(profile)
-                db.flush()
-                
-                vis = ProfileVisibility(
-                    student_profile_id=profile.id,
-                    is_public=True,
-                    show_contact=True,
-                    show_cgpa=False,
-                    is_demo=False
-                )
-                db.add(vis)
-                db.commit()
+                    c_handles = dict(roster_match.get("competitive_handles", {}))
+                    if roster_match.get("gender"):
+                        c_handles["gender"] = roster_match["gender"]
+
+                    profile = StudentProfile(
+                        user_id=user.id,
+                        enrolment_number=default_roll,
+                        programme=roster_match.get("programme", "Bachelor of Technology"),
+                        specialization="Artificial Intelligence and Robotics",
+                        batch="2024-2028",
+                        semester=roster_match.get("semester", 3),
+                        section="A",
+                        academic_year="2026-2027",
+                        bio=roster_match.get("bio", f"B.Tech {default_branch} student at MITS Gwalior."),
+                        looking_for=roster_match.get("looking_for", "Hackathon teammates and technical collaboration."),
+                        open_for_hackathons=roster_match.get("open_for_hackathons", True),
+                        open_source_contributor=roster_match.get("open_source_contributor", False),
+                        competitive_programming=roster_match.get("competitive_programming", False),
+                        competitive_handles=c_handles,
+                        github_url=roster_match.get("github_url"),
+                        linkedin_url=roster_match.get("linkedin_url"),
+                        portfolio_url=roster_match.get("portfolio_url"),
+                        availability_hours_per_week=roster_match.get("availability_hours_per_week", 15),
+                        availability_notes=roster_match.get("availability_notes", "Available on weekdays and weekends for hackathons."),
+                        preferred_roles=roster_match.get("preferred_roles", []),
+                        clubs=roster_match.get("clubs", []),
+                        tech_stack=roster_match.get("tech_stack", []),
+                        interests=roster_match.get("interests", []),
+                        domains=roster_match.get("domains", [default_branch]),
+                        experience=roster_match.get("professional_experiences", ["Academic Projects"]),
+                        completeness_score=roster_match.get("completeness_score", 85),
+                        data_source="verified_dataset",
+                        is_demo=False
+                    )
+                    db.add(profile)
+                    db.flush()
+
+                    from backend.app.models.student import StudentSkill
+                    for sk in roster_match.get("skills", []):
+                        db.add(StudentSkill(
+                            student_profile_id=profile.id,
+                            skill_name=sk.get("name", "Skill"),
+                            proficiency=sk.get("proficiency", "Intermediate"),
+                            category=sk.get("category", "Framework")
+                        ))
+
+                    vis = ProfileVisibility(
+                        student_profile_id=profile.id,
+                        is_public=True,
+                        show_contact=True,
+                        show_cgpa=False,
+                        is_demo=False
+                    )
+                    db.add(vis)
+                    db.commit()
+
+                else:
+                    # Type 2: Other student - default profile creation flow
+                    user = User(
+                        email=email,
+                        full_name=full_name,
+                        picture_url=picture,
+                        google_sub=google_sub,
+                        roll_number=default_roll,
+                        branch=default_branch,
+                        year_of_study="2",
+                        department_name=default_dept,
+                        is_active=True,
+                        is_demo=False
+                    )
+                    db.add(user)
+                    db.flush()
+
+                    # Assign STUDENT role
+                    student_role = db.query(Role).filter(Role.name == "STUDENT").first()
+                    if student_role:
+                        db.add(UserRole(user_id=user.id, role_id=student_role.id))
+
+                    # Create default student profile shell if not present
+                    profile = StudentProfile(
+                        user_id=user.id,
+                        enrolment_number=default_roll,
+                        programme="Bachelor of Technology",
+                        specialization="Artificial Intelligence and Robotics",
+                        batch="2024-2028",
+                        semester=3,
+                        section="A",
+                        academic_year="2026-2027",
+                        domains=[default_branch],
+                        bio="B.Tech Information Technology (Artificial Intelligence & Robotics) student at MITS Gwalior.",
+                        completeness_score=85,
+                        data_source="google_oauth_provisioned",
+                        is_demo=False
+                    )
+                    db.add(profile)
+                    db.flush()
+                    
+                    vis = ProfileVisibility(
+                        student_profile_id=profile.id,
+                        is_public=True,
+                        show_contact=True,
+                        show_cgpa=False,
+                        is_demo=False
+                    )
+                    db.add(vis)
+                    db.commit()
 
             elif effective_role == "FACULTY":
                 user = User(

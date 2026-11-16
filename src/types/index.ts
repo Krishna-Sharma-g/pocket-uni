@@ -195,23 +195,38 @@ export interface MessageSource {
 export interface StudentMatchCard {
   studentId: string;
   name: string;
-  email: string;
-  pictureUrl: string;
+  email?: string;
+  pictureUrl?: string;
   branch: string;
   year: number;
+  semester?: number;
+  gender?: string;
   rollNumber?: string;
+  headline?: string;
+  primaryDomain?: string;
   bio: string;
   matchedTags: string[];
   topSkills: string[];
-  openForHackathons: boolean;
+  skills?: Array<{ id?: string; name: string; proficiency?: string; category?: string }>;
+  techStack?: string[];
+  interests?: string[];
+  domains?: string[];
+  lookingFor?: string;
+  lookingForRoles?: string[];
   preferredRoles: string[];
+  openForHackathons: boolean;
+  isAvailable?: boolean;
+  availabilityHoursPerWeek?: number;
+  availabilityNotes?: string;
+  professionalExperiences?: string[];
+  openToCollaboratingWith?: string[];
   githubUrl?: string;
   linkedinUrl?: string;
-  headline?: string;
-  primaryDomain?: string;
+  portfolioUrl?: string;
+  completenessScore?: number;
   matchPercentage?: number;
-  semester?: number;
-  gender?: string;
+  matchScore?: number;
+  is_demo?: boolean;
 }
 
 export interface Message {

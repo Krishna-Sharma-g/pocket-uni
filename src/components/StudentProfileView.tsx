@@ -223,7 +223,10 @@ export const StudentProfileView: React.FC = () => {
       // 2. Persist to existing backend endpoint
       await apiClient.updateMyStudentProfile({
         bio: updatedPayload.bio,
+        headline: updatedPayload.headline,
+        primaryDomain: updatedPayload.primaryDomain,
         lookingFor: updatedPayload.lookingFor,
+        lookingForRoles: updatedPayload.lookingForRoles,
         githubUrl: updatedPayload.githubUrl,
         linkedinUrl: updatedPayload.linkedinUrl,
         portfolioUrl: updatedPayload.portfolioUrl,
@@ -231,6 +234,9 @@ export const StudentProfileView: React.FC = () => {
         domains: updatedPayload.domains,
         preferredRoles: updatedPayload.lookingForRoles,
         techStack: updatedPayload.techStack,
+        interests: updatedPayload.interests,
+        openToCollaboratingWith: updatedPayload.openToCollaboratingWith,
+        professionalExperiences: updatedPayload.professionalExperiences,
         skills: updatedPayload.skills.map((s) => ({
           name: s.name,
           proficiency: s.proficiency,
@@ -240,6 +246,9 @@ export const StudentProfileView: React.FC = () => {
       }).catch((err) => {
         console.warn('[StudentProfileView] Backend update notification:', err.message);
       });
+
+      // Dispatch real-time profile update event for Discover page sync
+      window.dispatchEvent(new CustomEvent('pocketuni_profile_updated', { detail: updatedPayload }));
 
       // 3. Mark completed in localStorage
       localStorage.setItem(`pocketuni_onboarding_completed_${currentUser.id}`, 'true');

@@ -21,62 +21,76 @@ import { getSavedStudentIds } from '../services/savedStudentsService';
 import { StudentMatchCard } from '../types';
 import { apiClient } from '../services/apiClient';
 
-const mapMatchCardToStudent = (c: StudentMatchCard): StudentWithUser => ({
-  user: {
-    id: c.studentId,
-    googleSub: '',
-    email: c.email || '',
-    role: 'student',
-    fullName: c.name,
-    pictureUrl: c.pictureUrl || '',
-    isActive: true,
-    lastLoginAt: new Date().toISOString(),
-    rollNumber: c.rollNumber,
-    enrolmentNumber: c.rollNumber,
-    branch: c.branch,
-    yearOfStudy: c.year,
-    semester: c.semester || 3,
-    gender: c.gender || 'Not Specified'
-  },
-  profile: {
-    studentId: c.studentId,
-    headline: c.headline || c.bio || `${c.branch} student at MITS Gwalior`,
-    primaryDomain: c.primaryDomain || (c.topSkills?.[0]) || 'Artificial Intelligence',
-    bio: c.bio || `B.Tech ${c.branch} student at MITS Gwalior.`,
-    lookingFor: 'Hackathon collaboration and technical projects',
-    lookingForRoles: c.preferredRoles?.length ? c.preferredRoles : ['Hackathon Team', 'Project Collaborator'],
-    openForHackathons: c.openForHackathons ?? true,
-    openSourceContributor: false,
-    competitiveProgramming: false,
-    competitiveHandles: {},
-    isAvailable: true,
-    openToCollaboratingWith: ['Same Branch', 'Other Branches', 'Same Year'],
-    collaborationMode: ['Both'],
-    professionalExperiences: ['Academic Projects'],
-    githubUrl: c.githubUrl || '',
-    linkedinUrl: c.linkedinUrl || '',
-    portfolioUrl: '',
-    availabilityHoursPerWeek: 15,
-    availabilityNotes: 'Available on weekdays and weekends for hackathons',
-    preferredRoles: c.preferredRoles?.length ? c.preferredRoles : ['AI Engineer', 'Software Developer'],
-    clubs: [],
-    skills: (c.topSkills || ['Python', 'AI', 'Robotics']).map((sk, idx) => ({
-      id: `sk-${idx}`,
-      name: sk,
-      proficiency: 'Intermediate',
-      category: 'Framework'
-    })),
-    techStack: c.topSkills || ['Python', 'AI'],
-    interests: c.matchedTags || [],
-    domains: [c.branch],
-    projects: [],
-    experiences: [],
-    certifications: [],
-    profileVisible: true,
-    completenessScore: 80,
-    updatedAt: new Date().toISOString()
-  }
-});
+const mapMatchCardToStudent = (c: StudentMatchCard): StudentWithUser => {
+  const matchPct = c.matchPercentage || c.completenessScore || 75;
+  return {
+    user: {
+      id: c.studentId,
+      googleSub: '',
+      email: c.email || '',
+      role: 'student',
+      fullName: c.name,
+      pictureUrl: c.pictureUrl || '',
+      isActive: true,
+      lastLoginAt: new Date().toISOString(),
+      rollNumber: c.rollNumber,
+      enrolmentNumber: c.rollNumber,
+      branch: c.branch,
+      yearOfStudy: c.year,
+      semester: c.semester || 3,
+      gender: c.gender || 'Not Specified'
+    },
+    profile: {
+      studentId: c.studentId,
+      headline: c.headline || c.bio || `${c.branch} student at MITS Gwalior`,
+      primaryDomain: c.primaryDomain || (c.topSkills?.[0]) || 'Artificial Intelligence',
+      bio: c.bio || `B.Tech ${c.branch} student at MITS Gwalior.`,
+      aboutMe: c.bio,
+      lookingFor: c.lookingFor || 'Hackathon collaboration and technical projects',
+      lookingForRoles: c.lookingForRoles?.length ? c.lookingForRoles : (c.preferredRoles?.length ? c.preferredRoles : ['Hackathon Team', 'Project Collaborator']),
+      openForHackathons: c.openForHackathons ?? true,
+      openSourceContributor: false,
+      competitiveProgramming: false,
+      competitiveHandles: {},
+      isAvailable: c.isAvailable ?? true,
+      openToCollaboratingWith: c.openToCollaboratingWith?.length ? c.openToCollaboratingWith : ['Same Branch', 'Other Branches', 'Same Year', 'Seniors'],
+      collaborationMode: ['Both'],
+      professionalExperiences: c.professionalExperiences?.length ? c.professionalExperiences : ['Academic Projects', 'Hackathons'],
+      githubUrl: c.githubUrl || '',
+      linkedinUrl: c.linkedinUrl || '',
+      portfolioUrl: c.portfolioUrl || '',
+      availabilityHoursPerWeek: c.availabilityHoursPerWeek || 15,
+      availabilityNotes: c.availabilityNotes || 'Available on weekdays and weekends for hackathons',
+      preferredRoles: c.preferredRoles?.length ? c.preferredRoles : ['AI Engineer', 'Software Developer'],
+      clubs: [],
+      skills: (c.skills?.length ? c.skills : (c.topSkills || ['Python', 'AI', 'Robotics'])).map((sk: any, idx: number) => {
+        if (typeof sk === 'string') {
+          return {
+            id: `sk-${idx}`,
+            name: sk,
+            proficiency: 'Intermediate' as const,
+            category: 'Framework'
+          };
+        }
+        return {
+          id: sk.id || `sk-${idx}`,
+          name: sk.name || sk.skill_name || 'Skill',
+          proficiency: sk.proficiency || 'Intermediate',
+          category: sk.category || 'Framework'
+        };
+      }),
+      techStack: c.techStack?.length ? c.techStack : (c.topSkills || ['Python', 'AI']),
+      interests: c.interests?.length ? c.interests : (c.matchedTags || []),
+      domains: c.domains?.length ? c.domains : [c.branch],
+      projects: [],
+      experiences: [],
+      certifications: [],
+      profileVisible: true,
+      completenessScore: matchPct,
+      updatedAt: new Date().toISOString()
+    }
+  };
+};
 
 export const DiscoverView: React.FC = () => {
   const { currentUser, setPreviewStudentCard } = useApp();
@@ -102,17 +116,60 @@ export const DiscoverView: React.FC = () => {
   );
   const [dbStudents, setDbStudents] = useState<StudentWithUser[]>([]);
 
+  // Fetch discovery students from database with personalized scores and filters
+  const fetchDiscoveryStudents = React.useCallback(async () => {
+    try {
+      const cards = await apiClient.getStudentDiscovery({
+        query: searchQuery.trim() || undefined,
+        gender: filterGender !== 'All' ? filterGender : undefined,
+        branch: filterBranch !== 'All' ? filterBranch : undefined,
+        year: filterYear !== 'All' ? filterYear : undefined,
+        semester: filterSemester !== 'All' ? filterSemester : undefined,
+        domain: filterDomain !== 'All' ? filterDomain : undefined,
+        skill: filterSkill !== 'All' ? filterSkill : undefined,
+        experience: filterExperience !== 'All' ? filterExperience : undefined,
+        looking_for: filterLookingFor !== 'All' ? filterLookingFor : undefined,
+        availability: filterAvailability !== 'All' ? filterAvailability : undefined,
+        open_to: filterOpenTo !== 'All' ? filterOpenTo : undefined
+      });
+      if (Array.isArray(cards)) {
+        setDbStudents(cards.map(mapMatchCardToStudent));
+      }
+    } catch {
+      // Fallback gracefully to existing data
+    }
+  }, [
+    searchQuery,
+    filterGender,
+    filterBranch,
+    filterYear,
+    filterSemester,
+    filterDomain,
+    filterSkill,
+    filterExperience,
+    filterLookingFor,
+    filterAvailability,
+    filterOpenTo
+  ]);
+
+  // Debounced fetch when search or filters change
   useEffect(() => {
-    let active = true;
-    apiClient.getStudentDiscovery()
-      .then((cards) => {
-        if (!active || !Array.isArray(cards)) return;
-        const mapped = cards.map(mapMatchCardToStudent);
-        setDbStudents(mapped);
-      })
-      .catch(() => {});
-    return () => { active = false; };
-  }, []);
+    const timer = setTimeout(() => {
+      fetchDiscoveryStudents();
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [fetchDiscoveryStudents]);
+
+  // Real-time synchronization when any student profile is updated
+  useEffect(() => {
+    const handleProfileUpdated = () => {
+      fetchDiscoveryStudents();
+    };
+    window.addEventListener('pocketuni_profile_updated', handleProfileUpdated);
+    return () => {
+      window.removeEventListener('pocketuni_profile_updated', handleProfileUpdated);
+    };
+  }, [fetchDiscoveryStudents]);
 
   useEffect(() => {
     const handleSavedUpdated = () => {
@@ -179,28 +236,37 @@ export const DiscoverView: React.FC = () => {
   const isFiltering = activeFiltersCount > 0;
 
   const matchesFilter = (s: StudentWithUser): boolean => {
-    // 1. Search Query across Name, Headline, Technical Skills, Primary Domain, Branch
+    // 1. Search Query across Name, Roll/Enrolment, Headline, Bio, Technical Skills, Tech Stack, Interests, Primary Domain, Branch
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const name = s.user.fullName.toLowerCase();
+      const roll = (s.user.rollNumber || s.user.enrolmentNumber || '').toLowerCase();
       const headline = (s.profile.headline || '').toLowerCase();
+      const bio = (s.profile.bio || s.profile.aboutMe || '').toLowerCase();
       const domain = (s.profile.primaryDomain || '').toLowerCase();
       const branch = (s.user.branch || '').toLowerCase();
       const skills = s.profile.skills.map((sk) => sk.name.toLowerCase()).join(' ');
+      const tech = (s.profile.techStack || []).join(' ').toLowerCase();
+      const interests = (s.profile.interests || []).join(' ').toLowerCase();
 
       const searchMatch =
         name.includes(q) ||
+        roll.includes(q) ||
         headline.includes(q) ||
+        bio.includes(q) ||
         domain.includes(q) ||
         branch.includes(q) ||
-        skills.includes(q);
+        skills.includes(q) ||
+        tech.includes(q) ||
+        interests.includes(q);
 
       if (!searchMatch) return false;
     }
 
     // 2. Gender
     if (filterGender !== 'All') {
-      if ((s.user.gender || 'Other').toLowerCase() !== filterGender.toLowerCase()) {
+      const g = (s.user.gender || 'Not Specified').toLowerCase();
+      if (g !== filterGender.toLowerCase()) {
         return false;
       }
     }
@@ -227,21 +293,50 @@ export const DiscoverView: React.FC = () => {
     // 6. Primary Domain
     if (filterDomain !== 'All') {
       const d = (s.profile.primaryDomain || s.profile.domains?.[0] || '').toLowerCase();
-      if (!d.includes(filterDomain.toLowerCase())) return false;
+      const target = filterDomain.toLowerCase();
+      const allDoms = [d, ...(s.profile.domains || []).map(x => x.toLowerCase())].join(' ');
+
+      const isAi = target.includes('ai') || target.includes('ml');
+      const isWeb = target.includes('web');
+      const isApp = target.includes('app');
+      const isData = target.includes('data');
+      const isRobotics = target.includes('robot');
+      const isCyber = target.includes('cyber');
+      const isCloud = target.includes('cloud') || target.includes('devops');
+      const isUiUx = target.includes('ui') || target.includes('ux');
+      const isCp = target.includes('competitive');
+      const isResearch = target.includes('research');
+
+      let domainMatch = false;
+      if (isAi && (allDoms.includes('ai') || allDoms.includes('artificial') || allDoms.includes('machine learning') || allDoms.includes('deep learning'))) domainMatch = true;
+      else if (isWeb && (allDoms.includes('web') || allDoms.includes('frontend') || allDoms.includes('backend') || allDoms.includes('full stack'))) domainMatch = true;
+      else if (isApp && (allDoms.includes('app') || allDoms.includes('mobile') || allDoms.includes('flutter') || allDoms.includes('android'))) domainMatch = true;
+      else if (isData && (allDoms.includes('data') || allDoms.includes('analytics'))) domainMatch = true;
+      else if (isRobotics && (allDoms.includes('robot') || allDoms.includes('embedded') || allDoms.includes('ros') || allDoms.includes('hardware'))) domainMatch = true;
+      else if (isCyber && (allDoms.includes('cyber') || allDoms.includes('security'))) domainMatch = true;
+      else if (isCloud && (allDoms.includes('cloud') || allDoms.includes('devops') || allDoms.includes('docker'))) domainMatch = true;
+      else if (isUiUx && (allDoms.includes('ui') || allDoms.includes('ux') || allDoms.includes('design') || allDoms.includes('figma'))) domainMatch = true;
+      else if (isCp && (allDoms.includes('competitive') || s.profile.competitiveProgramming)) domainMatch = true;
+      else if (isResearch && (allDoms.includes('research') || (s.profile.professionalExperiences || []).includes('Research'))) domainMatch = true;
+      else if (allDoms.includes(target)) domainMatch = true;
+
+      if (!domainMatch) return false;
     }
 
     // 7. Technical Skills
     if (filterSkill !== 'All') {
+      const target = filterSkill.toLowerCase();
       const hasSkill = s.profile.skills.some((sk) =>
-        sk.name.toLowerCase().includes(filterSkill.toLowerCase())
-      );
+        sk.name.toLowerCase().includes(target)
+      ) || (s.profile.techStack || []).some((t) => t.toLowerCase().includes(target));
       if (!hasSkill) return false;
     }
 
     // 8. Professional Experience
     if (filterExperience !== 'All') {
       const expList = s.profile.professionalExperiences || [];
-      if (!expList.some((e) => e.toLowerCase().includes(filterExperience.toLowerCase()))) {
+      const target = filterExperience.toLowerCase();
+      if (!expList.some((e) => e.toLowerCase().includes(target))) {
         return false;
       }
     }
@@ -249,7 +344,10 @@ export const DiscoverView: React.FC = () => {
     // 9. Looking For
     if (filterLookingFor !== 'All') {
       const roles = s.profile.lookingForRoles || (s.profile.lookingFor ? [s.profile.lookingFor] : []);
-      if (!roles.some((r) => r.toLowerCase().includes(filterLookingFor.toLowerCase()))) {
+      const prefRoles = s.profile.preferredRoles || [];
+      const allLf = [...roles, ...prefRoles, s.profile.lookingFor || ''].join(' ').toLowerCase();
+      const target = filterLookingFor.toLowerCase();
+      if (!allLf.includes(target)) {
         return false;
       }
     }
@@ -264,7 +362,8 @@ export const DiscoverView: React.FC = () => {
     // 11. Open To Collaborate
     if (filterOpenTo !== 'All') {
       const openToList = s.profile.openToCollaboratingWith || [];
-      if (!openToList.some((o) => o.toLowerCase().includes(filterOpenTo.toLowerCase()))) {
+      const target = filterOpenTo.toLowerCase();
+      if (!openToList.some((o) => o.toLowerCase().includes(target))) {
         return false;
       }
     }
