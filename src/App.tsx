@@ -75,6 +75,8 @@ export const App: React.FC = () => {
         return currentUser.role === 'faculty' ? <FacultyProfileView /> : <StudentProfileView />;
       case 'faculty_directory':
         return <FacultyDirectoryView />;
+      case 'faculty_profile':
+        return <FacultyProfileView />;
       case 'super_admin_dashboard':
         return <SuperAdminDashboardView />;
       default:

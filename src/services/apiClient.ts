@@ -181,6 +181,27 @@ class ApiClient {
     return this.request<any>(`/faculty/${facultyId}`);
   }
 
+  public async getFacultyTimetable(facultyId: string, day?: string) {
+    const params = new URLSearchParams();
+    if (day) params.append('day', day);
+    return this.request<any>(`/faculty/${facultyId}/timetable?${params.toString()}`);
+  }
+
+  public async uploadFacultyPhoto(facultyId: string, file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.request<any>(`/faculty/${facultyId}/photo`, {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  public async deleteFacultyPhoto(facultyId: string) {
+    return this.request<any>(`/faculty/${facultyId}/photo`, {
+      method: 'DELETE',
+    });
+  }
+
   // Applications
   public async listApplications() {
     return this.request<any[]>('/applications/');

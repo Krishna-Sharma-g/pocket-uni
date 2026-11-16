@@ -139,7 +139,7 @@ export const ProfileSetupWizard: React.FC<ProfileSetupWizardProps> = ({ isOpen, 
 
   const handlePrev = () => {
     setErrorBanner(null);
-    setStep((prev) => Math.max(1, prev - 1));
+    setStep((prev: number) => Math.max(1, prev - 1));
   };
 
   const handleResumeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -173,7 +173,8 @@ export const ProfileSetupWizard: React.FC<ProfileSetupWizardProps> = ({ isOpen, 
         primaryDomain,
         domains: [primaryDomain],
         skills,
-        techStack: skills.map((s) => s.name),
+        techStack: skills.map((s: any) => s.name),
+        interests: currentStudentProfile?.interests || (primaryDomain ? [primaryDomain] : []),
         professionalExperiences,
         resumeFileName,
         resumeFileSize,
@@ -209,13 +210,13 @@ export const ProfileSetupWizard: React.FC<ProfileSetupWizardProps> = ({ isOpen, 
         domains: updatedProfilePayload.domains,
         preferredRoles: updatedProfilePayload.lookingForRoles,
         techStack: updatedProfilePayload.techStack,
-        skills: updatedProfilePayload.skills.map((s) => ({
+        skills: updatedProfilePayload.skills.map((s: any) => ({
           name: s.name,
           proficiency: s.proficiency,
           category: s.category
         })),
         openForHackathons: updatedProfilePayload.openForHackathons
-      }).catch((err) => {
+      }).catch((err: any) => {
         console.warn('[Profile Wizard] Backend update notification:', err.message);
       });
 
@@ -233,7 +234,7 @@ export const ProfileSetupWizard: React.FC<ProfileSetupWizardProps> = ({ isOpen, 
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md overflow-y-auto animate-fade-in">
       <div
         className="relative w-full max-w-[700px] my-auto bg-[#12161A]/95 backdrop-blur-2xl border border-white/15 rounded-[22px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8)] text-[#FAFAFA] flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e: any) => e.stopPropagation()}
       >
         {/* Header with Title and Live Progress */}
         <div className="px-6 pt-6 pb-4 border-b border-white/10 space-y-3">
@@ -324,7 +325,7 @@ export const ProfileSetupWizard: React.FC<ProfileSetupWizardProps> = ({ isOpen, 
                     <input
                       type="url"
                       value={avatarUrl}
-                      onChange={(e) => setAvatarUrl(e.target.value)}
+                      onChange={(e: any) => setAvatarUrl(e.target.value)}
                       placeholder="https://images.unsplash.com/..."
                       className="w-full px-3 py-1.5 text-xs rounded-lg bg-black/40 border border-white/15 text-white/90 placeholder:text-white/30 focus:outline-none focus:border-emerald-400/50"
                     />
@@ -342,7 +343,7 @@ export const ProfileSetupWizard: React.FC<ProfileSetupWizardProps> = ({ isOpen, 
                   <input
                     type="text"
                     value={headline}
-                    onChange={(e) => setHeadline(e.target.value)}
+                    onChange={(e: any) => setHeadline(e.target.value)}
                     placeholder="e.g. Backend Developer | FastAPI | PostgreSQL"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/15 focus:border-white/40 focus:ring-1 focus:ring-white/20 text-xs sm:text-sm text-[#FAFAFA] placeholder:text-white/40 focus:outline-none transition-all duration-200"
                   />
@@ -358,7 +359,7 @@ export const ProfileSetupWizard: React.FC<ProfileSetupWizardProps> = ({ isOpen, 
                     maxLength={250}
                     rows={3}
                     value={aboutMe}
-                    onChange={(e) => setAboutMe(e.target.value)}
+                    onChange={(e: any) => setAboutMe(e.target.value)}
                     placeholder="Brief summary of your coding background, strengths, and what technologies excite you..."
                     className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/15 focus:border-white/40 focus:ring-1 focus:ring-white/20 text-xs sm:text-sm text-[#FAFAFA] placeholder:text-white/40 focus:outline-none resize-none transition-all duration-200 leading-relaxed"
                   />
@@ -473,7 +474,7 @@ export const ProfileSetupWizard: React.FC<ProfileSetupWizardProps> = ({ isOpen, 
                   <input
                     type="url"
                     value={githubUrl}
-                    onChange={(e) => setGithubUrl(e.target.value)}
+                    onChange={(e: any) => setGithubUrl(e.target.value)}
                     placeholder="https://github.com/username"
                     className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-black/40 border border-white/15 focus:border-white/40 focus:ring-1 focus:ring-white/20 text-xs sm:text-sm text-[#FAFAFA] placeholder:text-white/40 focus:outline-none transition-all duration-200"
                   />
@@ -488,7 +489,7 @@ export const ProfileSetupWizard: React.FC<ProfileSetupWizardProps> = ({ isOpen, 
                   <input
                     type="url"
                     value={linkedinUrl}
-                    onChange={(e) => setLinkedinUrl(e.target.value)}
+                    onChange={(e: any) => setLinkedinUrl(e.target.value)}
                     placeholder="https://linkedin.com/in/username"
                     className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-black/40 border border-white/15 focus:border-white/40 focus:ring-1 focus:ring-white/20 text-xs sm:text-sm text-[#FAFAFA] placeholder:text-white/40 focus:outline-none transition-all duration-200"
                   />
@@ -503,7 +504,7 @@ export const ProfileSetupWizard: React.FC<ProfileSetupWizardProps> = ({ isOpen, 
                   <input
                     type="url"
                     value={portfolioUrl}
-                    onChange={(e) => setPortfolioUrl(e.target.value)}
+                    onChange={(e: any) => setPortfolioUrl(e.target.value)}
                     placeholder="https://yourportfolio.dev"
                     className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-black/40 border border-white/15 focus:border-white/40 focus:ring-1 focus:ring-white/20 text-xs sm:text-sm text-[#FAFAFA] placeholder:text-white/40 focus:outline-none transition-all duration-200"
                   />
@@ -521,7 +522,7 @@ export const ProfileSetupWizard: React.FC<ProfileSetupWizardProps> = ({ isOpen, 
                 <textarea
                   rows={3}
                   value={achievements}
-                  onChange={(e) => setAchievements(e.target.value)}
+                  onChange={(e: any) => setAchievements(e.target.value)}
                   placeholder="e.g. Smart India Hackathon Finalist, Top 50 LeetCode Campus Rank, IEEE Student Paper Author..."
                   className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/15 focus:border-white/40 focus:ring-1 focus:ring-white/20 text-xs sm:text-sm text-[#FAFAFA] placeholder:text-white/40 focus:outline-none resize-none transition-all duration-200 leading-relaxed"
                 />

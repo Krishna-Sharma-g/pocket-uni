@@ -27,6 +27,7 @@ export type ActiveView =
   | 'application_detail'
   | 'profile'
   | 'faculty_directory'
+  | 'faculty_profile'
   | 'super_admin_dashboard';
 
 interface AppContextType {

@@ -4,6 +4,7 @@ import { StudentMatchCard } from '../../types';
 import { StudentWithUser } from '../../data/studentData';
 
 export interface StudentCardProps {
+  key?: any;
   student: StudentWithUser | StudentMatchCard;
   matchPercentage?: number;
   onViewProfile?: () => void;
@@ -56,9 +57,8 @@ export const StudentCard: React.FC<StudentCardProps> = ({
   return (
     <div
       onClick={onViewProfile}
-      className={`group relative rounded-2xl bg-[#12161A]/85 backdrop-blur-xl border border-white/10 hover:border-white/25 hover:bg-[#161C22]/95 hover:shadow-[0_12px_35px_rgba(0,0,0,0.45)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col justify-between overflow-hidden text-left p-4 sm:p-4.5 ${
-        horizontal ? 'w-[280px] sm:w-[310px] shrink-0' : 'w-full'
-      } ${className}`}
+      className={`group relative rounded-2xl bg-[#12161A]/85 backdrop-blur-xl border border-white/10 hover:border-white/25 hover:bg-[#161C22]/95 hover:shadow-[0_12px_35px_rgba(0,0,0,0.45)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col justify-between overflow-hidden text-left p-4 sm:p-4.5 ${horizontal ? 'w-[280px] sm:w-[310px] shrink-0' : 'w-full'
+        } ${className}`}
     >
       {/* Top Row: Avatar + Match Percentage */}
       <div>
@@ -113,7 +113,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             href={linkedinUrl}
             target="_blank"
             rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e: { stopPropagation: () => any; }) => e.stopPropagation()}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0077B5]/20 hover:bg-[#0077B5]/35 text-[#70B5F9] border border-[#0077B5]/35 text-[11px] font-medium transition-all"
             title="Approach on LinkedIn"
           >

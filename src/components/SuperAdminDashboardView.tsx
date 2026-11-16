@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, ChangeEvent, FormEvent, FC } from 'react';
 import {
   Layers,
   Upload,
@@ -34,8 +34,9 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { DocumentReviewModal } from './DocumentReviewModal';
+import { MITS_FACULTY } from '../data/facultyData';
 
-export const SuperAdminDashboardView: React.FC = () => {
+export const SuperAdminDashboardView: FC = () => {
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [stats, setStats] = useState<any>(null);
   const [health, setHealth] = useState<any>(null);
@@ -139,7 +140,7 @@ export const SuperAdminDashboardView: React.FC = () => {
     setIsSavingProfile(true);
     setProfileSaveNotice(null);
     try {
-      const skillsArray = studentForm.topSkills.split(',').map(x => x.trim()).filter(Boolean);
+      const skillsArray = studentForm.topSkills.split(',').map((x: string) => x.trim()).filter(Boolean);
       await apiClient.adminUpdateStudentProfile(editingStudent.studentId, {
         name: studentForm.name,
         branch: studentForm.branch,
@@ -148,7 +149,7 @@ export const SuperAdminDashboardView: React.FC = () => {
         bio: studentForm.bio,
         topSkills: skillsArray
       });
-      setStudentsList(prev => prev.map(item => item.studentId === editingStudent.studentId ? {
+      setStudentsList((prev: any[]) => prev.map((item: any) => item.studentId === editingStudent.studentId ? {
         ...item,
         name: studentForm.name,
         branch: studentForm.branch,
@@ -184,7 +185,7 @@ export const SuperAdminDashboardView: React.FC = () => {
     setIsSavingProfile(true);
     setProfileSaveNotice(null);
     try {
-      const areasArray = facultyForm.researchAreas.split(',').map(x => x.trim()).filter(Boolean);
+      const areasArray = facultyForm.researchAreas.split(',').map((x: string) => x.trim()).filter(Boolean);
       await apiClient.adminUpdateFacultyProfile(editingFaculty.facultyId, {
         name: facultyForm.name,
         designation: facultyForm.designation,
@@ -195,7 +196,7 @@ export const SuperAdminDashboardView: React.FC = () => {
         bio: facultyForm.bio,
         researchAreas: areasArray
       });
-      setFacultyList(prev => prev.map(item => item.facultyId === editingFaculty.facultyId ? {
+      setFacultyList((prev: any[]) => prev.map((item: any) => item.facultyId === editingFaculty.facultyId ? {
         ...item,
         name: facultyForm.name,
         designation: facultyForm.designation,
@@ -210,6 +211,61 @@ export const SuperAdminDashboardView: React.FC = () => {
       setTimeout(() => setEditingFaculty(null), 1200);
     } catch (err: any) {
       setProfileSaveNotice(`Failed to save: ${err.message || 'Server error'}`);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleFacultyPhotoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingFaculty) return;
+
+    const validExts = ['jpg', 'jpeg', 'png', 'webp'];
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!ext || !validExts.includes(ext)) {
+      setProfileSaveNotice('Invalid file format. Please upload JPG, JPEG, PNG, or WEBP.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setProfileSaveNotice('File size exceeds 5MB limit.');
+      return;
+    }
+
+    try {
+      setIsSavingProfile(true);
+      const res = await apiClient.uploadFacultyPhoto(editingFaculty.code || editingFaculty.facultyId, file);
+      if (res && res.photoUrl) {
+        const updatedPhoto = res.photoUrl;
+        setEditingFaculty({ ...editingFaculty, photoUrl: updatedPhoto });
+        setFacultyList((prev: any[]) => prev.map((f: any) =>
+          (f.facultyId === editingFaculty.facultyId || f.name === editingFaculty.name)
+            ? { ...f, photoUrl: updatedPhoto }
+            : f
+        ));
+        setProfileSaveNotice('Faculty image uploaded and synchronized across directory and profile.');
+      }
+    } catch (err: any) {
+      setProfileSaveNotice(`Failed to upload photo: ${err.message || 'Server error'}`);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleFacultyPhotoDelete = async () => {
+    if (!editingFaculty) return;
+    try {
+      setIsSavingProfile(true);
+      await apiClient.deleteFacultyPhoto(editingFaculty.code || editingFaculty.facultyId);
+      setEditingFaculty({ ...editingFaculty, photoUrl: null });
+      setFacultyList((prev: any[]) => prev.map((f: any) =>
+        (f.facultyId === editingFaculty.facultyId || f.name === editingFaculty.name)
+          ? { ...f, photoUrl: null }
+          : f
+      ));
+      setProfileSaveNotice('Faculty photo removed & reset to default placeholder.');
+    } catch (err: any) {
+      setProfileSaveNotice(`Failed to remove photo: ${err.message || 'Server error'}`);
     } finally {
       setIsSavingProfile(false);
     }
@@ -258,8 +314,12 @@ export const SuperAdminDashboardView: React.FC = () => {
         const t = await apiClient.getTemplates();
         setTemplates(t);
       } else if (tab === 'faculty' && facultyList.length === 0) {
-        const f = await apiClient.getFacultyDirectory();
-        setFacultyList(f);
+        try {
+          const f = await apiClient.getFacultyDirectory();
+          setFacultyList(f && f.length > 0 ? f : MITS_FACULTY);
+        } catch {
+          setFacultyList(MITS_FACULTY);
+        }
       } else if (tab === 'students' && studentsList.length === 0) {
         const st = await apiClient.getStudentDiscovery();
         setStudentsList(st);
@@ -287,7 +347,7 @@ export const SuperAdminDashboardView: React.FC = () => {
     }
   };
 
-  const handleFileUpload = async (e: React.FormEvent) => {
+  const handleFileUpload = async (e: FormEvent) => {
     e.preventDefault();
     if (!uploadFile) return;
 
@@ -325,7 +385,7 @@ export const SuperAdminDashboardView: React.FC = () => {
     }
   };
 
-  const handleResultsImport = async (e: React.FormEvent) => {
+  const handleResultsImport = async (e: FormEvent) => {
     e.preventDefault();
     if (!resultsFile) return;
     try {
@@ -349,7 +409,7 @@ export const SuperAdminDashboardView: React.FC = () => {
     }
   };
 
-  const handleRosterPreview = async (e: React.FormEvent) => {
+  const handleRosterPreview = async (e: FormEvent) => {
     e.preventDefault();
     if (!rosterFile) return;
     try {
@@ -445,7 +505,7 @@ export const SuperAdminDashboardView: React.FC = () => {
     }
   };
 
-  const filteredDocs = documents.filter((d) => {
+  const filteredDocs = documents.filter((d: any) => {
     const matchesCat = docFilterCategory === 'ALL' || d.category === docFilterCategory;
     const matchesStat = docFilterStatus === 'ALL' || d.status === docFilterStatus;
     const matchesSem = docFilterSemester === 'ALL' || (d.semester && d.semester.toLowerCase().includes(docFilterSemester.toLowerCase()));
@@ -512,7 +572,7 @@ export const SuperAdminDashboardView: React.FC = () => {
             { id: 'settings', label: '15. System Health & Settings', icon: Settings },
             { id: 'roster', label: '16. Roster & Excel Sync', icon: FileSpreadsheet },
             { id: 'website', label: '17. Web Crawler & Portals', icon: Globe },
-          ].map((item) => {
+          ].map((item: any) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
@@ -626,7 +686,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5 text-white/85">
-                      {auditLogs.slice(0, 6).map((log) => (
+                      {auditLogs.slice(0, 6).map((log: any) => (
                         <tr key={log.id} className="hover:bg-white/[0.04]">
                           <td className="px-4 py-2 text-white/50 font-mono text-[11px]">
                             {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -677,7 +737,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     <input
                       type="text"
                       value={uploadTitle}
-                      onChange={(e) => setUploadTitle(e.target.value)}
+                      onChange={(e: any) => setUploadTitle(e.target.value)}
                       placeholder="e.g. Centre for AI Even Semester Timetable 2026-27"
                       className="w-full px-3 py-2 text-xs rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                     />
@@ -687,7 +747,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     <label className="block text-xs font-semibold text-white/80 mb-1">Document Category</label>
                     <select
                       value={uploadCategory}
-                      onChange={(e) => setUploadCategory(e.target.value)}
+                      onChange={(e: any) => setUploadCategory(e.target.value)}
                       className="w-full px-3 py-2 text-xs rounded-xl border border-white/15 bg-[#12161A] text-[#FAFAFA] focus:outline-none focus:border-emerald-400/60"
                     >
                       <option value="">Auto-Detect from Content</option>
@@ -715,7 +775,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     <input
                       type="text"
                       value={uploadYear}
-                      onChange={(e) => setUploadYear(e.target.value)}
+                      onChange={(e: any) => setUploadYear(e.target.value)}
                       placeholder="e.g. 2026-2027"
                       className="w-full px-3 py-2 text-xs rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                     />
@@ -726,7 +786,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     <input
                       type="text"
                       value={uploadBatch}
-                      onChange={(e) => setUploadBatch(e.target.value)}
+                      onChange={(e: any) => setUploadBatch(e.target.value)}
                       placeholder="e.g. 2025-26, 2024-25"
                       className="w-full px-3 py-2 text-xs rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                     />
@@ -737,7 +797,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     <input
                       type="text"
                       value={uploadSemester}
-                      onChange={(e) => setUploadSemester(e.target.value)}
+                      onChange={(e: any) => setUploadSemester(e.target.value)}
                       placeholder="e.g. III Semester, V Semester"
                       className="w-full px-3 py-2 text-xs rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                     />
@@ -756,7 +816,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     type="file"
                     id="doc-upload-input"
                     className="hidden"
-                    onChange={(e) => {
+                    onChange={(e: any) => {
                       if (e.target.files && e.target.files[0]) {
                         setUploadFile(e.target.files[0]);
                       }
@@ -814,7 +874,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                   <input
                     type="text"
                     value={docSearchQuery}
-                    onChange={(e) => setDocSearchQuery(e.target.value)}
+                    onChange={(e: any) => setDocSearchQuery(e.target.value)}
                     placeholder="Search documents by title or filename..."
                     className="w-full pl-8 pr-3 py-1.5 text-xs bg-white rounded-lg border border-stone-warm focus:outline-none focus:border-terracotta"
                   />
@@ -824,7 +884,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                   <Filter className="w-3.5 h-3.5 text-slate-blue" />
                   <select
                     value={docFilterCategory}
-                    onChange={(e) => setDocFilterCategory(e.target.value)}
+                    onChange={(e: any) => setDocFilterCategory(e.target.value)}
                     className="px-2.5 py-1.5 rounded-lg border border-stone-warm bg-white focus:outline-none text-ink-navy"
                   >
                     <option value="ALL">All Categories</option>
@@ -848,7 +908,7 @@ export const SuperAdminDashboardView: React.FC = () => {
 
                   <select
                     value={docFilterStatus}
-                    onChange={(e) => setDocFilterStatus(e.target.value)}
+                    onChange={(e: any) => setDocFilterStatus(e.target.value)}
                     className="px-2.5 py-1.5 rounded-lg border border-stone-warm bg-white focus:outline-none text-ink-navy"
                   >
                     <option value="ALL">All Statuses</option>
@@ -875,7 +935,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-warm text-ink-navy">
-                    {filteredDocs.map((doc) => (
+                    {filteredDocs.map((doc: any) => (
                       <tr key={doc.id} className="hover:bg-paper">
                         <td className="px-4 py-2.5">
                           <p className="font-semibold text-ink-navy">{doc.title}</p>
@@ -937,7 +997,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-warm text-ink-navy">
-                    {timetables.map((t) => (
+                    {timetables.map((t: any) => (
                       <tr key={t.id} className="hover:bg-paper">
                         <td className="px-4 py-2 font-semibold">{t.day}</td>
                         <td className="px-4 py-2 font-mono text-[11px]">{t.startTime} – {t.endTime}</td>
@@ -974,7 +1034,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-warm text-ink-navy">
-                    {datesheets.map((e) => (
+                    {datesheets.map((e: any) => (
                       <tr key={e.id} className="hover:bg-paper">
                         <td className="px-4 py-2 font-mono font-semibold">{e.date}</td>
                         <td className="px-4 py-2 font-mono text-[11px]">{e.time}</td>
@@ -1011,7 +1071,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-warm text-ink-navy">
-                    {calendars.map((c) => (
+                    {calendars.map((c: any) => (
                       <tr key={c.id} className="hover:bg-paper">
                         <td className="px-4 py-2">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
@@ -1057,7 +1117,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                   <input
                     type="file"
                     accept=".csv,.xlsx"
-                    onChange={(e) => {
+                    onChange={(e: any) => {
                       if (e.target.files && e.target.files[0]) setResultsFile(e.target.files[0]);
                     }}
                     className="text-xs"
@@ -1065,7 +1125,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                   <input
                     type="text"
                     value={resultsSession}
-                    onChange={(e) => setResultsSession(e.target.value)}
+                    onChange={(e: any) => setResultsSession(e.target.value)}
                     placeholder="Session (e.g. June 2026)"
                     className="px-3 py-1.5 text-xs rounded-lg border border-stone-warm bg-white focus:outline-none"
                   />
@@ -1093,7 +1153,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-warm text-ink-navy">
-                    {resultsList.map((r) => (
+                    {resultsList.map((r: any) => (
                       <tr key={r.id} className="hover:bg-paper">
                         <td className="px-4 py-2 font-mono font-semibold">{r.rollNumber}</td>
                         <td className="px-4 py-2 font-medium">{r.studentName}</td>
@@ -1140,7 +1200,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-warm text-ink-navy">
-                    {studentsList.map((s) => (
+                    {studentsList.map((s: any) => (
                       <tr key={s.studentId} className="hover:bg-paper">
                         <td className="px-4 py-2 font-mono font-semibold">{s.rollNumber}</td>
                         <td className="px-4 py-2 font-medium">{s.name}</td>
@@ -1198,9 +1258,18 @@ export const SuperAdminDashboardView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-warm text-ink-navy">
-                    {facultyList.map((f) => (
+                    {facultyList.map((f: any) => (
                       <tr key={f.facultyId} className="hover:bg-paper">
-                        <td className="px-4 py-2 font-semibold text-ink-navy">{f.name}</td>
+                        <td className="px-4 py-2 font-semibold text-ink-navy">
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src={f.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'}
+                              alt={f.name}
+                              className="w-7 h-7 rounded-lg object-cover border border-stone-warm shrink-0 bg-paper"
+                            />
+                            <span>{f.name}</span>
+                          </div>
+                        </td>
                         <td className="px-4 py-2 text-slate-blue">{f.designation}</td>
                         <td className="px-4 py-2">{f.department}</td>
                         <td className="px-4 py-2 text-slate-blue text-[11px]">{f.researchAreas?.join(', ')}</td>
@@ -1238,7 +1307,7 @@ export const SuperAdminDashboardView: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {templates.map((tpl) => (
+                {templates.map((tpl: any) => (
                   <div key={tpl.id} className="p-4 rounded-xl border border-stone-warm bg-paper space-y-2">
                     <div className="flex items-center justify-between">
                       <h4 className="font-semibold text-xs text-ink-navy">{tpl.title}</h4>
@@ -1275,7 +1344,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-warm text-ink-navy">
-                    {auditLogs.map((l) => (
+                    {auditLogs.map((l: any) => (
                       <tr key={l.id} className="hover:bg-paper">
                         <td className="px-4 py-2 font-mono text-[11px] text-slate-blue">
                           {new Date(l.createdAt).toLocaleString()}
@@ -1394,7 +1463,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                       </label>
                       <select
                         value={rosterEntityType}
-                        onChange={(e) => {
+                        onChange={(e: any) => {
                           setRosterEntityType(e.target.value as any);
                           setRosterPreview(null);
                         }}
@@ -1412,7 +1481,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                       <input
                         type="file"
                         accept=".xlsx"
-                        onChange={(e) => {
+                        onChange={(e: any) => {
                           setRosterFile(e.target.files?.[0] || null);
                           setRosterPreview(null);
                         }}
@@ -1662,7 +1731,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                       min={1}
                       max={30}
                       value={crawlMaxPages}
-                      onChange={(e) => setCrawlMaxPages(Math.max(1, parseInt(e.target.value) || 1))}
+                      onChange={(e: any) => setCrawlMaxPages(Math.max(1, parseInt(e.target.value) || 1))}
                       className="w-20 px-3 py-1.5 rounded-xl border border-stone-warm bg-white text-xs font-mono font-semibold"
                     />
                   </div>
@@ -1854,7 +1923,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                 <input
                   type="text"
                   value={studentForm.name}
-                  onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
+                  onChange={(e: any) => setStudentForm({ ...studentForm, name: e.target.value })}
                   className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                 />
               </div>
@@ -1864,7 +1933,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                 <input
                   type="text"
                   value={studentForm.branch}
-                  onChange={(e) => setStudentForm({ ...studentForm, branch: e.target.value })}
+                  onChange={(e: any) => setStudentForm({ ...studentForm, branch: e.target.value })}
                   className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                 />
               </div>
@@ -1877,7 +1946,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                     min={1}
                     max={8}
                     value={studentForm.semester}
-                    onChange={(e) => setStudentForm({ ...studentForm, semester: Number(e.target.value) })}
+                    onChange={(e: any) => setStudentForm({ ...studentForm, semester: Number(e.target.value) })}
                     className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] focus:outline-none focus:border-emerald-400/60"
                   />
                 </div>
@@ -1886,7 +1955,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                   <input
                     type="text"
                     value={studentForm.section}
-                    onChange={(e) => setStudentForm({ ...studentForm, section: e.target.value })}
+                    onChange={(e: any) => setStudentForm({ ...studentForm, section: e.target.value })}
                     className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] focus:outline-none focus:border-emerald-400/60"
                   />
                 </div>
@@ -1897,7 +1966,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                 <input
                   type="text"
                   value={studentForm.topSkills}
-                  onChange={(e) => setStudentForm({ ...studentForm, topSkills: e.target.value })}
+                  onChange={(e: any) => setStudentForm({ ...studentForm, topSkills: e.target.value })}
                   placeholder="Python, PyTorch, ROS, React"
                   className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                 />
@@ -1908,7 +1977,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                 <textarea
                   rows={3}
                   value={studentForm.bio}
-                  onChange={(e) => setStudentForm({ ...studentForm, bio: e.target.value })}
+                  onChange={(e: any) => setStudentForm({ ...studentForm, bio: e.target.value })}
                   className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                 />
               </div>
@@ -1967,13 +2036,53 @@ export const SuperAdminDashboardView: React.FC = () => {
               </div>
             )}
 
-            <div className="space-y-3 text-xs">
+            <div className="space-y-4 text-xs">
+              {/* Faculty Image Management Section (Super Admin) */}
+              <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 space-y-2.5">
+                <label className="font-semibold text-white/80 text-xs block">Faculty Profile Image</label>
+                <div className="flex items-center gap-4">
+                  <img
+                    src={editingFaculty.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'}
+                    alt={editingFaculty.name}
+                    className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-400/40 bg-black/50 shadow-sm shrink-0"
+                  />
+                  <div className="flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] text-white text-xs font-semibold border border-white/15 cursor-pointer transition-all shadow-xs">
+                        <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>{isSavingProfile ? 'Uploading...' : (editingFaculty.photoUrl ? 'Replace Photo' : 'Upload Photo')}</span>
+                        <input
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.webp"
+                          className="hidden"
+                          onChange={handleFacultyPhotoUpload}
+                          disabled={isSavingProfile}
+                        />
+                      </label>
+                      {editingFaculty.photoUrl && (
+                        <button
+                          type="button"
+                          onClick={handleFacultyPhotoDelete}
+                          disabled={isSavingProfile}
+                          className="px-3 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 text-xs font-semibold border border-rose-500/30 cursor-pointer transition-all"
+                        >
+                          Delete Photo
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-white/50">
+                      Accepted formats: JPG, JPEG, PNG, WEBP (Max 5MB). Syncs immediately across Directory and Profiles.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="font-semibold text-white/80 block mb-1">Faculty Name</label>
                 <input
                   type="text"
                   value={facultyForm.name}
-                  onChange={(e) => setFacultyForm({ ...facultyForm, name: e.target.value })}
+                  onChange={(e: any) => setFacultyForm({ ...facultyForm, name: e.target.value })}
                   className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                 />
               </div>
@@ -1984,7 +2093,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                   <input
                     type="text"
                     value={facultyForm.designation}
-                    onChange={(e) => setFacultyForm({ ...facultyForm, designation: e.target.value })}
+                    onChange={(e: any) => setFacultyForm({ ...facultyForm, designation: e.target.value })}
                     className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                   />
                 </div>
@@ -1993,7 +2102,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                   <input
                     type="text"
                     value={facultyForm.department}
-                    onChange={(e) => setFacultyForm({ ...facultyForm, department: e.target.value })}
+                    onChange={(e: any) => setFacultyForm({ ...facultyForm, department: e.target.value })}
                     className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                   />
                 </div>
@@ -2005,7 +2114,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                   <input
                     type="text"
                     value={facultyForm.officeLocation}
-                    onChange={(e) => setFacultyForm({ ...facultyForm, officeLocation: e.target.value })}
+                    onChange={(e: any) => setFacultyForm({ ...facultyForm, officeLocation: e.target.value })}
                     placeholder="Academic Block B, Room 102"
                     className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                   />
@@ -2015,7 +2124,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                   <input
                     type="text"
                     value={facultyForm.phoneInternal}
-                    onChange={(e) => setFacultyForm({ ...facultyForm, phoneInternal: e.target.value })}
+                    onChange={(e: any) => setFacultyForm({ ...facultyForm, phoneInternal: e.target.value })}
                     placeholder="0751-2409391"
                     className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                   />
@@ -2027,7 +2136,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                 <input
                   type="text"
                   value={facultyForm.officeHours}
-                  onChange={(e) => setFacultyForm({ ...facultyForm, officeHours: e.target.value })}
+                  onChange={(e: any) => setFacultyForm({ ...facultyForm, officeHours: e.target.value })}
                   placeholder="Mon, Wed, Fri: 3:00 PM - 5:00 PM"
                   className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                 />
@@ -2038,7 +2147,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                 <input
                   type="text"
                   value={facultyForm.researchAreas}
-                  onChange={(e) => setFacultyForm({ ...facultyForm, researchAreas: e.target.value })}
+                  onChange={(e: any) => setFacultyForm({ ...facultyForm, researchAreas: e.target.value })}
                   placeholder="Artificial Intelligence, Deep Learning, Edge Robotics"
                   className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                 />
@@ -2049,7 +2158,7 @@ export const SuperAdminDashboardView: React.FC = () => {
                 <textarea
                   rows={3}
                   value={facultyForm.bio}
-                  onChange={(e) => setFacultyForm({ ...facultyForm, bio: e.target.value })}
+                  onChange={(e: any) => setFacultyForm({ ...facultyForm, bio: e.target.value })}
                   className="w-full p-2.5 rounded-xl border border-white/15 bg-black/40 text-[#FAFAFA] placeholder:text-white/35 focus:outline-none focus:border-emerald-400/60"
                 />
               </div>

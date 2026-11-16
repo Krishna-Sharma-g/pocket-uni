@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, ChangeEvent, FC } from 'react';
 import {
   User as UserIcon,
   Mail,
@@ -26,7 +26,8 @@ import {
   ExternalLink,
   Save,
   RotateCcw,
-  AlertCircle
+  AlertCircle,
+  Camera
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { apiClient } from '../services/apiClient';
@@ -39,9 +40,10 @@ import { CollaborationSelector } from './profile/CollaborationSelector';
 import { ProfileSetupWizard } from './profile/ProfileSetupWizard';
 import { ds } from '../styles/designSystem';
 
-export const StudentProfileView: React.FC = () => {
+export const StudentProfileView: FC = () => {
   const {
     currentUser,
+    setCurrentUser,
     currentStudentProfile,
     studentProfileLoading,
     studentProfileError,
@@ -53,6 +55,8 @@ export const StudentProfileView: React.FC = () => {
   // Mode: View vs Edit
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -94,7 +98,7 @@ export const StudentProfileView: React.FC = () => {
     setLinkedinUrl(p.linkedinUrl || '');
     setPortfolioUrl(p.portfolioUrl || '');
     setAchievements(p.achievements || '');
-    setLookingFor(p.lookingForRoles || (p.lookingFor ? p.lookingFor.split(',').map(s => s.trim()) : []));
+    setLookingFor(p.lookingForRoles || (p.lookingFor ? p.lookingFor.split(',').map((s: string) => s.trim()) : []));
     setIsAvailable(p.isAvailable !== undefined ? p.isAvailable : p.openForHackathons);
     setOpenTo(p.openToCollaboratingWith || []);
     setCollaborationMode(p.collaborationMode || []);
@@ -159,7 +163,7 @@ export const StudentProfileView: React.FC = () => {
     setIsEditing(false);
   };
 
-  const handleResumeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleResumeUpload = (e: ChangeEvent<HTMLInputElement>) => {
     setResumeError(null);
     const file = e.target.files?.[0];
     if (!file) return;
@@ -176,6 +180,49 @@ export const StudentProfileView: React.FC = () => {
     const sizeStr = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
     setResumeFileName(file.name);
     setResumeFileSize(sizeStr);
+  };
+
+  const handleAvatarFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    setAvatarUploadError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validExts = ['jpg', 'jpeg', 'png', 'webp'];
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!ext || !validExts.includes(ext)) {
+      setAvatarUploadError('Invalid format. Please select a JPG, JPEG, PNG, or WEBP image.');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarUploadError('File size exceeds 2 MB limit.');
+      return;
+    }
+
+    try {
+      setIsUploadingAvatar(true);
+      const res = await apiClient.uploadAvatar(file);
+      if (res && res.avatarUrl) {
+        const newUrl = res.avatarUrl;
+        setAvatarUrl(newUrl);
+
+        if (currentUser) {
+          const updatedUser = { ...currentUser, pictureUrl: newUrl };
+          setCurrentUser(updatedUser);
+          localStorage.setItem('pocketuni_user', JSON.stringify(updatedUser));
+        }
+
+        updateStudentProfile({ pictureUrl: newUrl } as any);
+
+        window.dispatchEvent(new CustomEvent('pocketuni_profile_updated', {
+          detail: { pictureUrl: newUrl, avatarUrl: newUrl }
+        }));
+      }
+    } catch (err: any) {
+      setAvatarUploadError(err.message || 'Failed to upload profile photo.');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
   };
 
   const handleSaveProfile = async () => {
@@ -198,7 +245,8 @@ export const StudentProfileView: React.FC = () => {
         primaryDomain,
         domains: [primaryDomain],
         skills,
-        techStack: skills.map((s) => s.name),
+        techStack: skills.map((s: any) => s.name),
+        interests: p?.interests || (primaryDomain ? [primaryDomain] : []),
         professionalExperiences,
         resumeFileName,
         resumeFileSize,
@@ -237,13 +285,13 @@ export const StudentProfileView: React.FC = () => {
         interests: updatedPayload.interests,
         openToCollaboratingWith: updatedPayload.openToCollaboratingWith,
         professionalExperiences: updatedPayload.professionalExperiences,
-        skills: updatedPayload.skills.map((s) => ({
+        skills: updatedPayload.skills.map((s: any) => ({
           name: s.name,
           proficiency: s.proficiency,
           category: s.category
         })),
         openForHackathons: updatedPayload.openForHackathons
-      }).catch((err) => {
+      }).catch((err: any) => {
         console.warn('[StudentProfileView] Backend update notification:', err.message);
       });
 
@@ -391,23 +439,60 @@ export const StudentProfileView: React.FC = () => {
                 </h3>
 
                 {/* Profile Photo */}
-                <div className="flex items-center gap-4 p-3 rounded-2xl bg-black/30 border border-white/10">
-                  <img
-                    src={avatarUrl || currentUser.pictureUrl}
-                    alt={currentUser.fullName}
-                    className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-400/40 bg-black/40 shadow-sm shrink-0"
-                  />
-                  <div className="flex-1 space-y-1">
-                    <label className="block text-xs font-semibold text-[#FAFAFA]">
-                      Profile Photo URL
-                    </label>
-                    <input
-                      type="url"
-                      value={avatarUrl}
-                      onChange={(e) => setAvatarUrl(e.target.value)}
-                      placeholder="https://images.unsplash.com/..."
-                      className="w-full px-3 py-1.5 text-xs rounded-lg bg-black/40 border border-white/15 text-white/90 placeholder:text-white/30 focus:outline-none focus:border-emerald-400/50"
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-2xl bg-black/30 border border-white/10">
+                  <div className="relative group shrink-0">
+                    <img
+                      src={avatarUrl || currentUser.pictureUrl}
+                      alt={currentUser.fullName}
+                      className="w-18 h-18 rounded-2xl object-cover border-2 border-emerald-400/40 bg-black/40 shadow-sm"
                     />
+                    <label
+                      title="Upload new image"
+                      className="absolute inset-0 bg-black/60 rounded-2xl opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-semibold transition-opacity cursor-pointer"
+                    >
+                      <Camera className="w-5 h-5 mb-0.5 text-emerald-400" />
+                      <span>{isUploadingAvatar ? '...' : 'Upload'}</span>
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.webp"
+                        className="hidden"
+                        onChange={handleAvatarFileChange}
+                        disabled={isUploadingAvatar}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] text-white text-xs font-semibold border border-white/15 cursor-pointer transition-all shadow-xs">
+                        <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>{isUploadingAvatar ? 'Uploading Image...' : 'Upload Profile Image'}</span>
+                        <input
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.webp"
+                          className="hidden"
+                          onChange={handleAvatarFileChange}
+                          disabled={isUploadingAvatar}
+                        />
+                      </label>
+                      {avatarUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setAvatarUrl('')}
+                          className="px-2.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/60 hover:text-white text-xs font-medium border border-white/10 transition-colors"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-white/50">
+                      Accepted formats: JPG, JPEG, PNG, WEBP (Max 2MB). Persists across all pages.
+                    </p>
+                    {avatarUploadError && (
+                      <p className="text-[11px] text-rose-400 font-medium">
+                        {avatarUploadError}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -419,7 +504,7 @@ export const StudentProfileView: React.FC = () => {
                   <input
                     type="text"
                     value={headline}
-                    onChange={(e) => setHeadline(e.target.value)}
+                    onChange={(e: any) => setHeadline(e.target.value)}
                     placeholder="e.g. Backend Developer | FastAPI | PostgreSQL"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/15 focus:border-white/40 focus:ring-1 focus:ring-white/20 text-xs sm:text-sm text-[#FAFAFA] placeholder:text-white/40 focus:outline-none"
                   />
@@ -435,7 +520,7 @@ export const StudentProfileView: React.FC = () => {
                     maxLength={250}
                     rows={3}
                     value={aboutMe}
-                    onChange={(e) => setAboutMe(e.target.value)}
+                    onChange={(e: any) => setAboutMe(e.target.value)}
                     placeholder="Tell MITS peers about your coding background and what you are building..."
                     className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/15 focus:border-white/40 focus:ring-1 focus:ring-white/20 text-xs sm:text-sm text-[#FAFAFA] placeholder:text-white/40 focus:outline-none resize-none leading-relaxed"
                   />
@@ -528,7 +613,7 @@ export const StudentProfileView: React.FC = () => {
                     <input
                       type="url"
                       value={githubUrl}
-                      onChange={(e) => setGithubUrl(e.target.value)}
+                      onChange={(e: any) => setGithubUrl(e.target.value)}
                       placeholder="https://github.com/username"
                       className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-black/40 border border-white/15 text-xs text-[#FAFAFA] focus:outline-none focus:border-emerald-400/50"
                     />
@@ -543,7 +628,7 @@ export const StudentProfileView: React.FC = () => {
                     <input
                       type="url"
                       value={linkedinUrl}
-                      onChange={(e) => setLinkedinUrl(e.target.value)}
+                      onChange={(e: any) => setLinkedinUrl(e.target.value)}
                       placeholder="https://linkedin.com/in/username"
                       className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-black/40 border border-white/15 text-xs text-[#FAFAFA] focus:outline-none focus:border-emerald-400/50"
                     />
@@ -558,7 +643,7 @@ export const StudentProfileView: React.FC = () => {
                     <input
                       type="url"
                       value={portfolioUrl}
-                      onChange={(e) => setPortfolioUrl(e.target.value)}
+                      onChange={(e: any) => setPortfolioUrl(e.target.value)}
                       placeholder="https://yourportfolio.dev"
                       className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-black/40 border border-white/15 text-xs text-[#FAFAFA] focus:outline-none focus:border-emerald-400/50"
                     />
@@ -571,7 +656,7 @@ export const StudentProfileView: React.FC = () => {
                   <textarea
                     rows={2}
                     value={achievements}
-                    onChange={(e) => setAchievements(e.target.value)}
+                    onChange={(e: any) => setAchievements(e.target.value)}
                     placeholder="Hackathon wins, competitive ranks, awards..."
                     className="w-full px-3.5 py-2 rounded-xl bg-black/40 border border-white/15 text-xs text-[#FAFAFA] focus:outline-none focus:border-emerald-400/50 resize-none leading-relaxed"
                   />
@@ -623,11 +708,27 @@ export const StudentProfileView: React.FC = () => {
               {/* Identity & Headline Hero Card */}
               <div className="bg-[#12161A]/85 backdrop-blur-xl rounded-3xl border border-white/10 p-6 shadow-[0_15px_35px_rgba(0,0,0,0.4)] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative">
                 <div className="flex items-start sm:items-center gap-4">
-                  <img
-                    src={currentUser.pictureUrl}
-                    alt={currentUser.fullName}
-                    className="w-20 h-20 rounded-2xl object-cover border-2 border-emerald-400/40 shadow-card shrink-0 bg-black/40"
-                  />
+                  <div className="relative group shrink-0">
+                    <img
+                      src={currentUser.pictureUrl}
+                      alt={currentUser.fullName}
+                      className="w-20 h-20 rounded-2xl object-cover border-2 border-emerald-400/40 shadow-card bg-black/40"
+                    />
+                    <label
+                      title="Upload / Change Profile Photo"
+                      className="absolute inset-0 bg-black/60 rounded-2xl opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-semibold transition-opacity cursor-pointer"
+                    >
+                      <Camera className="w-5 h-5 mb-0.5 text-emerald-400" />
+                      <span>{isUploadingAvatar ? '...' : 'Change'}</span>
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.webp"
+                        className="hidden"
+                        onChange={handleAvatarFileChange}
+                        disabled={isUploadingAvatar}
+                      />
+                    </label>
+                  </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-heading font-bold text-xl text-[#FAFAFA]">
@@ -687,7 +788,7 @@ export const StudentProfileView: React.FC = () => {
 
                 {p.skills && p.skills.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-                    {p.skills.map((skill) => (
+                    {p.skills.map((skill: any) => (
                       <div
                         key={skill.id}
                         className="p-2.5 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between"
@@ -729,7 +830,7 @@ export const StudentProfileView: React.FC = () => {
 
                 {p.professionalExperiences && p.professionalExperiences.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
-                    {p.professionalExperiences.map((exp) => (
+                    {p.professionalExperiences.map((exp: string) => (
                       <span
                         key={exp}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-emerald-950/50 text-emerald-300 border border-emerald-500/30 shadow-sm"
@@ -888,7 +989,7 @@ export const StudentProfileView: React.FC = () => {
                     <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Looking For</span>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {p.lookingForRoles && p.lookingForRoles.length > 0 ? (
-                        p.lookingForRoles.map((role) => (
+                        p.lookingForRoles.map((role: string) => (
                           <span key={role} className="text-[11px] font-medium px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-500/30">
                             {role}
                           </span>
@@ -904,7 +1005,7 @@ export const StudentProfileView: React.FC = () => {
                     <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Open To</span>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {p.openToCollaboratingWith && p.openToCollaboratingWith.length > 0 ? (
-                        p.openToCollaboratingWith.map((o) => (
+                        p.openToCollaboratingWith.map((o: string) => (
                           <span key={o} className="text-[11px] font-medium px-2 py-0.5 rounded bg-white/[0.05] text-white/90 border border-white/10">
                             {o}
                           </span>
@@ -920,7 +1021,7 @@ export const StudentProfileView: React.FC = () => {
                     <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Mode</span>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {p.collaborationMode && p.collaborationMode.length > 0 ? (
-                        p.collaborationMode.map((m) => (
+                        p.collaborationMode.map((m: string) => (
                           <span key={m} className="text-[11px] font-medium px-2 py-0.5 rounded bg-white/[0.05] text-white/90 border border-white/10">
                             {m}
                           </span>

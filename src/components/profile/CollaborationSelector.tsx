@@ -65,7 +65,7 @@ export const CollaborationSelector: React.FC<CollaborationSelectorProps> = ({
   const toggleLookingFor = (id: string) => {
     if (disabled) return;
     if (lookingFor.includes(id)) {
-      onLookingForChange(lookingFor.filter(x => x !== id));
+      onLookingForChange(lookingFor.filter((x: string) => x !== id));
     } else {
       onLookingForChange([...lookingFor, id]);
     }
@@ -82,9 +82,9 @@ export const CollaborationSelector: React.FC<CollaborationSelectorProps> = ({
       return;
     }
 
-    const withoutAnyone = openTo.filter(x => x !== 'Anyone');
+    const withoutAnyone = openTo.filter((x: string) => x !== 'Anyone');
     if (withoutAnyone.includes(opt)) {
-      onOpenToChange(withoutAnyone.filter(x => x !== opt));
+      onOpenToChange(withoutAnyone.filter((x: string) => x !== opt));
     } else {
       onOpenToChange([...withoutAnyone, opt]);
     }
@@ -96,9 +96,9 @@ export const CollaborationSelector: React.FC<CollaborationSelectorProps> = ({
       onCollaborationModeChange(['Both']);
       return;
     }
-    const withoutBoth = collaborationMode.filter(m => m !== 'Both');
+    const withoutBoth = collaborationMode.filter((m: string) => m !== 'Both');
     if (withoutBoth.includes(mode)) {
-      onCollaborationModeChange(withoutBoth.filter(m => m !== mode));
+      onCollaborationModeChange(withoutBoth.filter((m: string) => m !== mode));
     } else {
       onCollaborationModeChange([...withoutBoth, mode]);
     }
@@ -112,7 +112,7 @@ export const CollaborationSelector: React.FC<CollaborationSelectorProps> = ({
           Looking For <span className="text-white/40 font-normal lowercase">(multi-select)</span>
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {LOOKING_FOR_OPTIONS.map((item) => {
+          {LOOKING_FOR_OPTIONS.map((item: any) => {
             const isSelected = lookingFor.includes(item.id);
             return (
               <button
@@ -188,7 +188,7 @@ export const CollaborationSelector: React.FC<CollaborationSelectorProps> = ({
           Open To Collaborating With <span className="text-white/40 font-normal lowercase">(multi-select)</span>
         </label>
         <div className="flex flex-wrap gap-2">
-          {OPEN_TO_OPTIONS.map((opt) => {
+          {OPEN_TO_OPTIONS.map((opt: string) => {
             const isSelected = openTo.includes(opt);
             return (
               <button
@@ -215,7 +215,7 @@ export const CollaborationSelector: React.FC<CollaborationSelectorProps> = ({
           Collaboration Mode
         </label>
         <div className="grid grid-cols-3 gap-2">
-          {COLLABORATION_MODES.map((mode) => {
+          {COLLABORATION_MODES.map((mode: string) => {
             const isSelected = collaborationMode.includes(mode);
             return (
               <button

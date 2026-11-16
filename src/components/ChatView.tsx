@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, FC } from 'react';
 import {
   Send,
   Square,
@@ -26,7 +26,7 @@ import { useApp } from '../context/AppContext';
 import { Message, StudentMatchCard } from '../types';
 import { StudentCard } from './discover/StudentCard';
 
-export const ChatView: React.FC = () => {
+export const ChatView: FC = () => {
   const {
     currentUser,
     chatMessages,
@@ -41,9 +41,9 @@ export const ChatView: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-resize textarea up to 8 lines (~190px)
   useEffect(() => {
@@ -62,7 +62,7 @@ export const ChatView: React.FC = () => {
     setShowScrollBottom(!isAtBottom);
   };
 
-  const scrollToBottom = (smooth = true) => {
+  const scrollToBottom = (smooth: boolean = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
   };
 
@@ -151,7 +151,7 @@ export const ChatView: React.FC = () => {
 
               {/* Quick Prompt Suggestions */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl text-left pt-2">
-                {quickPrompts.map((q, idx) => (
+                {quickPrompts.map((q: any, idx: number) => (
                   <button
                     key={idx}
                     onClick={() => {
@@ -171,7 +171,7 @@ export const ChatView: React.FC = () => {
             </div>
           ) : (
             /* Message Thread */
-            chatMessages.map((msg) => (
+            chatMessages.map((msg: any) => (
               <div
                 key={msg.id}
                 className={`flex flex-col ${
@@ -345,7 +345,7 @@ export const ChatView: React.FC = () => {
                         <span className="text-[11px] font-semibold text-white/60 uppercase tracking-wider">
                           Sources:
                         </span>
-                        {msg.sources.map((src, idx) => (
+                        {msg.sources.map((src: any, idx: number) => (
                           <a
                             key={idx}
                             href={src.url || src.sourceUrl}
@@ -434,7 +434,7 @@ export const ChatView: React.FC = () => {
               ref={textareaRef}
               rows={1}
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={(e: any) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isStreaming}
               placeholder="Ask about MITS academics, policies, placements or find teammates..."
@@ -480,7 +480,7 @@ function renderFormattedMessage(content: string, sourceUrl?: string) {
   const lines = content.replace(/\]\s*\r?\n\s*\(/g, '](').split('\n');
   return (
     <div className="space-y-1.5">
-      {lines.map((line, idx) => {
+      {lines.map((line: any, idx: number) => {
         if (!line.trim()) {
           return <div key={idx} className="h-1.5" />;
         }
@@ -558,7 +558,7 @@ function resolveMessageUrl(rawUrl: string, sourceUrl?: string) {
   }
 }
 
-function MessageImage({ src, alt }: { src: string; alt: string }) {
+function MessageImage({ src, alt }: { src: string; alt: string; key?: any }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
     return <a href={src} target="_blank" rel="noreferrer" className="text-emerald-300 underline">Open image on the MITS site</a>;

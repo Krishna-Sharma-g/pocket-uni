@@ -48,7 +48,7 @@ export const DomainSelector: React.FC<DomainSelectorProps> = ({
 }) => {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-      {DOMAIN_OPTIONS.map((opt) => {
+      {DOMAIN_OPTIONS.map((opt: any) => {
         const isSelected = selectedDomain.toLowerCase() === opt.id.toLowerCase() ||
           (opt.id === 'AI / ML' && selectedDomain.toLowerCase().includes('ai')) ||
           (opt.id === 'Web Development' && selectedDomain.toLowerCase().includes('web'));

@@ -59,9 +59,9 @@ export const ExperienceSelector: React.FC<ExperienceSelectorProps> = ({
     }
 
     // Toggle other options (and deselect 'None Yet' if selected)
-    const withoutNone = selectedExperiences.filter(x => x !== 'None Yet');
+    const withoutNone = selectedExperiences.filter((x: string) => x !== 'None Yet');
     if (withoutNone.includes(id)) {
-      onChange(withoutNone.filter(x => x !== id));
+      onChange(withoutNone.filter((x: string) => x !== id));
     } else {
       onChange([...withoutNone, id]);
     }
@@ -69,7 +69,7 @@ export const ExperienceSelector: React.FC<ExperienceSelectorProps> = ({
 
   return (
     <div className="flex flex-wrap gap-2">
-      {EXPERIENCE_OPTIONS.map((opt) => {
+      {EXPERIENCE_OPTIONS.map((opt: any) => {
         const isSelected = selectedExperiences.includes(opt.id);
 
         return (

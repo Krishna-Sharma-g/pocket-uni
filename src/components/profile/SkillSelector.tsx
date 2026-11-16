@@ -48,16 +48,16 @@ export const SkillSelector: React.FC<SkillSelectorProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const existingNames = new Set(skills.map(s => s.name.toLowerCase()));
+  const existingNames = new Set(skills.map((s: StudentSkill) => s.name.toLowerCase()));
 
   // Filter skills
-  const filteredSuggestions = POPULAR_SKILLS.filter(s =>
+  const filteredSuggestions = POPULAR_SKILLS.filter((s: string) =>
     s.toLowerCase().includes(searchQuery.trim().toLowerCase()) &&
     !existingNames.has(s.toLowerCase())
   );
 
   const isCustomAvailable = searchQuery.trim().length > 0 &&
-    !POPULAR_SKILLS.some(s => s.toLowerCase() === searchQuery.trim().toLowerCase()) &&
+    !POPULAR_SKILLS.some((s: string) => s.toLowerCase() === searchQuery.trim().toLowerCase()) &&
     !existingNames.has(searchQuery.trim().toLowerCase());
 
   const handleAddSkill = (skillName: string) => {
@@ -79,23 +79,23 @@ export const SkillSelector: React.FC<SkillSelectorProps> = ({
 
   const handleRemoveSkill = (skillId: string) => {
     if (disabled) return;
-    onChange(skills.filter(s => s.id !== skillId));
+    onChange(skills.filter((s: StudentSkill) => s.id !== skillId));
   };
 
   const handleProficiencyChange = (skillId: string, level: SkillProficiency) => {
     if (disabled) return;
     onChange(
-      skills.map(s => s.id === skillId ? { ...s, proficiency: level } : s)
+      skills.map((s: StudentSkill) => s.id === skillId ? { ...s, proficiency: level } : s)
     );
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setHighlightIndex(prev => Math.min(prev + 1, filteredSuggestions.length + (isCustomAvailable ? 0 : -1)));
+      setHighlightIndex((prev: number) => Math.min(prev + 1, filteredSuggestions.length + (isCustomAvailable ? 0 : -1)));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setHighlightIndex(prev => Math.max(prev - 1, 0));
+      setHighlightIndex((prev: number) => Math.max(prev - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (filteredSuggestions.length > 0 && highlightIndex < filteredSuggestions.length) {
@@ -123,7 +123,7 @@ export const SkillSelector: React.FC<SkillSelectorProps> = ({
             disabled={disabled || maxReached}
             value={searchQuery}
             onFocus={() => setIsDropdownOpen(true)}
-            onChange={(e) => {
+            onChange={(e: any) => {
               setSearchQuery(e.target.value);
               setIsDropdownOpen(true);
               setHighlightIndex(0);
@@ -155,7 +155,7 @@ export const SkillSelector: React.FC<SkillSelectorProps> = ({
         {/* Dropdown Menu */}
         {isDropdownOpen && !maxReached && (
           <div className="absolute left-0 right-0 top-full mt-1.5 z-30 max-h-56 overflow-y-auto rounded-xl bg-[#12161A]/95 border border-white/15 shadow-[0_15px_35px_rgba(0,0,0,0.6)] backdrop-blur-xl p-1.5 space-y-1">
-            {filteredSuggestions.map((skill, idx) => (
+            {filteredSuggestions.map((skill: string, idx: number) => (
               <button
                 key={skill}
                 type="button"
@@ -211,7 +211,7 @@ export const SkillSelector: React.FC<SkillSelectorProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
-            {skills.map((skill) => (
+            {skills.map((skill: StudentSkill) => (
               <div
                 key={skill.id}
                 className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/20 transition-all duration-150"
@@ -229,10 +229,10 @@ export const SkillSelector: React.FC<SkillSelectorProps> = ({
                     <select
                       disabled={disabled}
                       value={skill.proficiency}
-                      onChange={(e) => handleProficiencyChange(skill.id, e.target.value as SkillProficiency)}
+                      onChange={(e: any) => handleProficiencyChange(skill.id, e.target.value as SkillProficiency)}
                       className="text-[11px] font-medium appearance-none pl-2 pr-6 py-1 rounded-lg bg-black/50 border border-white/15 text-white/90 hover:border-white/30 focus:outline-none focus:border-emerald-400/60 cursor-pointer"
                     >
-                      {PROFICIENCY_LEVELS.map((lvl) => (
+                      {PROFICIENCY_LEVELS.map((lvl: SkillProficiency) => (
                         <option key={lvl} value={lvl} className="bg-[#12161A] text-white">
                           {lvl}
                         </option>

@@ -12,6 +12,7 @@ class FacultyPublicationSchema(BaseModel):
 
 class FacultyProfileOut(BaseModel):
     facultyId: str
+    code: Optional[str] = None
     name: str
     designation: str
     department: str
@@ -34,6 +35,9 @@ class FacultyProfileOut(BaseModel):
     verificationStatus: str
     isMentor: bool = False
     is_demo: bool = False
+    timetable: Optional[Dict[str, Any]] = None
+    subjects: Optional[List[Dict[str, Any]]] = None
+    rooms: Optional[List[str]] = None
 
 
 class FacultyProfileUpdateRequest(BaseModel):
