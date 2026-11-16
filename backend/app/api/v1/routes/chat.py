@@ -394,11 +394,15 @@ async def stream_message(
                 f"{academic_context_str}\n"
                 f"==========================================\n\n"
                 f"Recent conversation:\n{history_text or 'This is the start of the conversation.'}\n\n"
-                f"Institutional Context:\n{context_text}\n\n"
-                f"Current user message: {text_input}\n\n"
-                "Respond to the current message naturally, directly, and helpfully. When the student asks about their "
-                "schedule, timetable, classes, branch, or verified records without repeating their branch/semester, "
-                "always ground your answer in their verified student details above."
+                f"Institutional Context from College Database / RAG:\n{context_text}\n\n"
+                f"Current user question: {text_input}\n\n"
+                "Instructions:\n"
+                "- If the question relates to MITS Gwalior (academics, syllabus, faculty, clubs, timetable, facilities, policies), "
+                "synthesize your answer using the institutional context and verified student details above. "
+                "Cite relevant document sources if provided.\n"
+                "- If the question is a general query about engineering, coding, careers, hackathons, college life, or study tips, "
+                "answer knowledgeably, helpfully, and encouragingly as PocketUni, the official AI academic companion for MITS Gwalior.\n"
+                "- Always keep your tone natural, friendly, and concise. Never say 'I don't have information' if you can provide a helpful, intelligent answer."
             )
 
             full_content = []

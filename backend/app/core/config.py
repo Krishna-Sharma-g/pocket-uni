@@ -52,15 +52,19 @@ class Settings(BaseSettings):
         os.path.join(os.path.dirname(__file__), "../../../storage")
     )
 
-    # Gemini AI Configuration
-    GEMINI_ENABLED: bool = False
+    # Gemini AI Configuration (Free tier from Google AI Studio: https://aistudio.google.com/)
+    GEMINI_ENABLED: bool = True
     GEMINI_API_KEY: str = ""
-    GEMINI_CHAT_MODEL: str = "gemini-2.5-flash"
+    GEMINI_CHAT_MODEL: str = "gemini-1.5-flash"
     GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
     GEMINI_TEMPERATURE: float = 0.2
     GEMINI_MAX_OUTPUT_TOKENS: int = 2048
     GEMINI_TIMEOUT: int = 30
     GEMINI_MAX_RETRIES: int = 3
+
+    # Groq AI Configuration (100% Free fallback / alternative: https://console.groq.com/keys)
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
     
     # CORS
     CORS_ORIGINS: list[str] = [
