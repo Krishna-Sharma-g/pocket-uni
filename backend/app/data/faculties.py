@@ -323,12 +323,17 @@ def resolve_faculty(query: str) -> Optional[Dict[str, Any]]:
     """
     Resolves faculty by code, full name, or alias.
     Handles 'RKS', 'Dr. Rahul Kumar Sharma', 'MC sir', 'Mausam Chouksey', etc.
+    Also handles route prefixes like 'cai-nm', 'fac-dr--neeraj-mishra'.
     """
     q = query.strip().lower()
+    if q.startswith("cai-"):
+        q = q[4:].strip()
+    if q.startswith("fac-"):
+        q = q[4:].replace("-", " ").strip()
     q_clean = q.replace(".", "").replace("dr ", "").replace("mr ", "").replace("ms ", "").replace("mrs ", "").replace("prof ", "").strip()
     
     # 1. Exact code match
-    code_match = get_faculty_by_code(query)
+    code_match = get_faculty_by_code(q.upper()) or get_faculty_by_code(query)
     if code_match:
         return code_match
         

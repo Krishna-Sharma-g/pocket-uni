@@ -14,6 +14,55 @@ const getApiBaseUrl = (): string => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+export const resolvePhotoUrl = (url?: string | null): string => {
+  if (!url) return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const root = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+  return `${root}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
+export const getCustomFacultyPhoto = (key?: string | null): string | null => {
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem('pocketuni_custom_faculty_photos');
+    if (!raw) return null;
+    const cache = JSON.parse(raw);
+    return cache[key] || cache[key.toLowerCase()] || null;
+  } catch (_) {
+    return null;
+  }
+};
+
+export const saveCustomFacultyPhoto = (keys: (string | undefined | null)[], photoUrl: string) => {
+  try {
+    const raw = localStorage.getItem('pocketuni_custom_faculty_photos') || '{}';
+    const cache = JSON.parse(raw);
+    for (const k of keys) {
+      if (k) {
+        cache[k] = photoUrl;
+        cache[k.toLowerCase()] = photoUrl;
+      }
+    }
+    localStorage.setItem('pocketuni_custom_faculty_photos', JSON.stringify(cache));
+  } catch (_) {}
+};
+
+export const deleteCustomFacultyPhoto = (keys: (string | undefined | null)[]) => {
+  try {
+    const raw = localStorage.getItem('pocketuni_custom_faculty_photos') || '{}';
+    const cache = JSON.parse(raw);
+    for (const k of keys) {
+      if (k) {
+        delete cache[k];
+        delete cache[k.toLowerCase()];
+      }
+    }
+    localStorage.setItem('pocketuni_custom_faculty_photos', JSON.stringify(cache));
+  } catch (_) {}
+};
+
 class ApiClient {
   private token: string | null = null;
 

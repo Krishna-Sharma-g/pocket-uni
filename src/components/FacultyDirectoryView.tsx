@@ -3,7 +3,7 @@ import { Search, Mail, Phone, MapPin, ExternalLink, ChevronRight, GraduationCap,
 import { useApp } from '../context/AppContext';
 import { MITS_FACULTY, searchFaculty } from '../data/facultyData';
 import { FacultyProfile } from '../types';
-import { apiClient } from '../services/apiClient';
+import { apiClient, resolvePhotoUrl, getCustomFacultyPhoto } from '../services/apiClient';
 
 export const FacultyDirectoryView: FC = () => {
   const { setSelectedFaculty, setActiveView } = useApp();
@@ -191,7 +191,8 @@ export const FacultyDirectoryView: FC = () => {
               const fName = fac.name || 'Faculty Member';
               const fDesig = fac.designation || 'Faculty';
               const fDept = fac.department || 'Centre for Artificial Intelligence';
-              const fPhoto = fac.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80';
+              const photoFromCache = getCustomFacultyPhoto(fac.code) || getCustomFacultyPhoto(fac.facultyId) || getCustomFacultyPhoto(fac.name);
+              const fPhoto = resolvePhotoUrl(photoFromCache || fac.photoUrl);
 
               // Safe extraction of research areas
               const areas: string[] = Array.isArray(fac.researchAreas)

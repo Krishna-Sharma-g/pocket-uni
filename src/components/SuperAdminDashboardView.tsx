@@ -32,7 +32,12 @@ import {
   Play,
   Edit
 } from 'lucide-react';
-import { apiClient } from '../services/apiClient';
+import {
+  apiClient,
+  resolvePhotoUrl,
+  saveCustomFacultyPhoto,
+  deleteCustomFacultyPhoto
+} from '../services/apiClient';
 import { DocumentReviewModal } from './DocumentReviewModal';
 import { MITS_FACULTY } from '../data/facultyData';
 
@@ -234,12 +239,17 @@ export const SuperAdminDashboardView: FC = () => {
 
     try {
       setIsSavingProfile(true);
-      const res = await apiClient.uploadFacultyPhoto(editingFaculty.code || editingFaculty.facultyId, file);
+      const lookupTarget = editingFaculty.code || editingFaculty.facultyId || editingFaculty.name;
+      const res = await apiClient.uploadFacultyPhoto(lookupTarget, file);
       if (res && res.photoUrl) {
         const updatedPhoto = res.photoUrl;
+        saveCustomFacultyPhoto(
+          [editingFaculty.code, editingFaculty.facultyId, editingFaculty.name, res.facultyId],
+          updatedPhoto
+        );
         setEditingFaculty({ ...editingFaculty, photoUrl: updatedPhoto });
         setFacultyList((prev: any[]) => prev.map((f: any) =>
-          (f.facultyId === editingFaculty.facultyId || f.name === editingFaculty.name)
+          (f.facultyId === editingFaculty.facultyId || f.name === editingFaculty.name || (editingFaculty.code && f.code === editingFaculty.code))
             ? { ...f, photoUrl: updatedPhoto }
             : f
         ));
@@ -256,10 +266,12 @@ export const SuperAdminDashboardView: FC = () => {
     if (!editingFaculty) return;
     try {
       setIsSavingProfile(true);
-      await apiClient.deleteFacultyPhoto(editingFaculty.code || editingFaculty.facultyId);
+      const lookupTarget = editingFaculty.code || editingFaculty.facultyId || editingFaculty.name;
+      deleteCustomFacultyPhoto([editingFaculty.code, editingFaculty.facultyId, editingFaculty.name]);
+      await apiClient.deleteFacultyPhoto(lookupTarget);
       setEditingFaculty({ ...editingFaculty, photoUrl: null });
       setFacultyList((prev: any[]) => prev.map((f: any) =>
-        (f.facultyId === editingFaculty.facultyId || f.name === editingFaculty.name)
+        (f.facultyId === editingFaculty.facultyId || f.name === editingFaculty.name || (editingFaculty.code && f.code === editingFaculty.code))
           ? { ...f, photoUrl: null }
           : f
       ));
@@ -1263,7 +1275,7 @@ export const SuperAdminDashboardView: FC = () => {
                         <td className="px-4 py-2 font-semibold text-ink-navy">
                           <div className="flex items-center gap-2.5">
                             <img
-                              src={f.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'}
+                              src={resolvePhotoUrl(f.photoUrl)}
                               alt={f.name}
                               className="w-7 h-7 rounded-lg object-cover border border-stone-warm shrink-0 bg-paper"
                             />
@@ -2042,7 +2054,7 @@ export const SuperAdminDashboardView: FC = () => {
                 <label className="font-semibold text-white/80 text-xs block">Faculty Profile Image</label>
                 <div className="flex items-center gap-4">
                   <img
-                    src={editingFaculty.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'}
+                    src={resolvePhotoUrl(editingFaculty.photoUrl)}
                     alt={editingFaculty.name}
                     className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-400/40 bg-black/50 shadow-sm shrink-0"
                   />

@@ -25,7 +25,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { MITS_FACULTY } from '../data/facultyData';
 import { FacultyProfile } from '../types';
-import { apiClient } from '../services/apiClient';
+import { apiClient, resolvePhotoUrl, getCustomFacultyPhoto } from '../services/apiClient';
 
 interface FacultyProfileViewProps {
   customFaculty?: FacultyProfile | null;
@@ -70,6 +70,8 @@ export const FacultyProfileView: FC<FacultyProfileViewProps> = ({ customFaculty 
     : (selectedFaculty || MITS_FACULTY[0]);
 
   const faculty = loadedFaculty || customFaculty || selectedFaculty || defaultFacultyForRole;
+  const photoFromCache = getCustomFacultyPhoto((faculty as any)?.code) || getCustomFacultyPhoto(faculty?.facultyId) || getCustomFacultyPhoto(faculty?.name);
+  const displayPhoto = resolvePhotoUrl(photoFromCache || faculty?.photoUrl);
 
   // Load timetable directly from authoritative timetable service via backend
   useEffect(() => {
@@ -240,7 +242,7 @@ export const FacultyProfileView: FC<FacultyProfileViewProps> = ({ customFaculty 
         <div className="bg-[#12161A]/85 backdrop-blur-xl rounded-3xl border border-white/10 p-6 sm:p-7 shadow-[0_15px_35px_rgba(0,0,0,0.4)] flex flex-col sm:flex-row items-start sm:items-center gap-6 relative overflow-hidden">
           <div className="relative shrink-0">
             <img
-              src={faculty?.photoUrl}
+              src={displayPhoto}
               alt={faculty?.name}
               onError={(e: any) => {
                 (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80';

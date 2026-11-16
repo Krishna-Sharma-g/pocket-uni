@@ -1,6 +1,7 @@
 import os
 import io
 import uuid
+import re
 import mimetypes
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
@@ -31,6 +32,118 @@ router = APIRouter()
 
 FACULTY_PHOTOS_DIR = os.path.abspath(os.path.join(settings.STORAGE_DIR, "faculty_photos"))
 os.makedirs(FACULTY_PHOTOS_DIR, exist_ok=True)
+
+
+def _normalize_name_key(text: Optional[str]) -> str:
+    """Canonical name normalizer: strips professional prefixes, punctuation, and whitespace."""
+    if not text:
+        return ""
+    cleaned = text.lower()
+    for prefix in ["dr.", "dr ", "prof.", "prof ", "mr.", "mr ", "ms.", "ms ", "mrs.", "mrs "]:
+        if cleaned.startswith(prefix):
+            cleaned = cleaned[len(prefix):].strip()
+    return re.sub(r'[^a-z0-9]', '', cleaned)
+
+
+def _find_or_create_faculty_profile(faculty_id: str, db: Session) -> Optional[FacultyProfile]:
+    """
+    Finds or creates a FacultyProfile record matching the given identifier.
+    Guarantees resolution across:
+    1. Primary key UUID (FacultyProfile.id)
+    2. User ID (FacultyProfile.user_id)
+    3. Faculty code (e.g. 'NM', 'AS', 'cai-nm')
+    4. Name slug (e.g. 'fac-dr--neeraj-mishra')
+    5. Case/title-insensitive name in DB
+    6. Code-based email
+    """
+    raw_id = (faculty_id or "").strip()
+    if not raw_id:
+        return None
+
+    # 1. Direct ID / User ID
+    p = db.query(FacultyProfile).filter((FacultyProfile.id == raw_id) | (FacultyProfile.user_id == raw_id)).first()
+    if p:
+        return p
+
+    # 2. Extract potential code or clean name
+    clean_target = raw_id
+    if clean_target.lower().startswith("cai-"):
+        clean_target = clean_target[4:].strip()
+    elif clean_target.lower().startswith("fac-"):
+        clean_target = clean_target[4:].replace("-", " ").strip()
+
+    # 3. Resolve via FACULTIES dictionary
+    resolved = get_faculty_by_code(clean_target.upper())
+    if not resolved:
+        resolved = resolve_faculty(clean_target)
+    if not resolved:
+        resolved = resolve_faculty(raw_id)
+
+    db_profiles = db.query(FacultyProfile).filter(FacultyProfile.is_deleted == False).all()
+
+    if resolved:
+        target_name = resolved["name"]
+        target_code = resolved["code"]
+        target_norm = _normalize_name_key(target_name)
+
+        # Match by normalized name
+        for dp in db_profiles:
+            if dp.name and _normalize_name_key(dp.name) == target_norm:
+                return dp
+
+        # Match by code-based email
+        code_email = f"{target_code.lower()}@mitsgwalior.in"
+        for dp in db_profiles:
+            if dp.email_public and dp.email_public.strip().lower() == code_email:
+                return dp
+
+        # Match by aliases
+        for dp in db_profiles:
+            dp_norm = _normalize_name_key(dp.name)
+            for alias in resolved.get("aliases", []):
+                if _normalize_name_key(alias) == dp_norm:
+                    return dp
+
+        # Fuzzy containment match
+        for dp in db_profiles:
+            dp_norm = _normalize_name_key(dp.name)
+            if dp_norm and (dp_norm in target_norm or target_norm in dp_norm):
+                return dp
+
+        # Create new DB record for this faculty member
+        new_prof = FacultyProfile(
+            name=target_name,
+            designation=resolved.get("designation", "Assistant Professor"),
+            department=resolved.get("department", "Centre for Artificial Intelligence"),
+            email_public=code_email,
+            office_location="Centre for Artificial Intelligence, Academic Block",
+            verification_status="VERIFIED_OFFICIAL_SOURCE",
+            is_demo=False
+        )
+        db.add(new_prof)
+        db.flush()
+        return new_prof
+
+    # 4. Search existing DB profiles by normalized name
+    norm_query = _normalize_name_key(clean_target)
+    for dp in db_profiles:
+        if dp.name:
+            dp_norm = _normalize_name_key(dp.name)
+            if dp_norm == norm_query or (len(norm_query) >= 4 and (norm_query in dp_norm or dp_norm in norm_query)):
+                return dp
+
+    # 5. Create new generic DB profile
+    new_prof = FacultyProfile(
+        name=clean_target.title(),
+        designation="Faculty Member",
+        department="Centre for Artificial Intelligence",
+        office_location="Academic Block, MITS Gwalior",
+        verification_status="VERIFIED_OFFICIAL_SOURCE",
+        is_demo=False
+    )
+    db.add(new_prof)
+    db.flush()
+    return new_prof
 
 
 def get_current_user_optional(
@@ -317,7 +430,8 @@ def get_faculty_directory(
     """
     # 1. Fetch all existing FacultyProfile records from DB
     db_profiles = db.query(FacultyProfile).filter(FacultyProfile.is_deleted == False).all()
-    db_by_name = {p.name.strip().lower(): p for p in db_profiles}
+    db_by_name = {p.name.strip().lower(): p for p in db_profiles if p.name}
+    db_by_norm = {_normalize_name_key(p.name): p for p in db_profiles if p.name}
     db_by_email = {p.email_public.strip().lower(): p for p in db_profiles if p.email_public}
     
     # 2. Build items from FACULTIES dictionary (authoritative AI department source)
@@ -328,13 +442,28 @@ def get_faculty_directory(
         fname = fac_data["name"]
         fdesig = fac_data.get("designation", "Assistant Professor")
         fdept = fac_data.get("department", "Centre for Artificial Intelligence")
+        f_norm = _normalize_name_key(fname)
 
-        # Match DB record by name or aliases
+        # Match DB record by exact name, normalized name, code email, or aliases
         matched_db: Optional[FacultyProfile] = db_by_name.get(fname.strip().lower())
         if not matched_db:
+            matched_db = db_by_norm.get(f_norm)
+        if not matched_db:
+            matched_db = db_by_email.get(f"{code.lower()}@mitsgwalior.in")
+        if not matched_db:
             for alias in fac_data.get("aliases", []):
+                alias_norm = _normalize_name_key(alias)
                 if alias in db_by_name:
                     matched_db = db_by_name[alias]
+                    break
+                if alias_norm in db_by_norm:
+                    matched_db = db_by_norm[alias_norm]
+                    break
+        if not matched_db:
+            for dp in db_profiles:
+                dp_norm = _normalize_name_key(dp.name)
+                if dp_norm and (dp_norm in f_norm or f_norm in dp_norm):
+                    matched_db = dp
                     break
         
         item = _build_unified_faculty_item(
@@ -347,16 +476,22 @@ def get_faculty_directory(
             include_timetable=False
         )
         unified_list.append(item)
+        if matched_db:
+            handled_names.add(matched_db.id)
+            if matched_db.name:
+                handled_names.add(_normalize_name_key(matched_db.name))
         handled_names.add(fname.strip().lower())
+        handled_names.add(f_norm)
 
     # 3. Include any additional faculty from DB not already covered (e.g., CSE, IoT)
     for p in db_profiles:
-        if p.name.strip().lower() not in handled_names:
+        p_norm = _normalize_name_key(p.name)
+        if p.id not in handled_names and p_norm not in handled_names and p.name.strip().lower() not in handled_names:
             item = _build_unified_faculty_item(
                 code=None,
                 name=p.name,
-                designation=p.designation,
-                department=p.department,
+                designation=p.designation or "Faculty Member",
+                department=p.department or "Centre for Artificial Intelligence",
                 centre=p.centre,
                 qualification=p.qualification,
                 db_profile=p,
@@ -364,7 +499,8 @@ def get_faculty_directory(
                 include_timetable=False
             )
             unified_list.append(item)
-            handled_names.add(p.name.strip().lower())
+            handled_names.add(p.id)
+            handled_names.add(p_norm)
 
     # 4. Department filtering
     if department:
@@ -452,51 +588,24 @@ def get_faculty_profile(
     Retrieves complete faculty profile including weekly timetable, subjects taught,
     external scholarly links, publications, and contact info.
     """
-    clean_id = faculty_id.strip()
+    profile = _find_or_create_faculty_profile(faculty_id, db)
+    fac_dict = resolve_faculty(faculty_id)
+    if not fac_dict and profile and profile.name:
+        fac_dict = resolve_faculty(profile.name)
 
-    # 1. Try DB lookup by UUID or user_id
-    f_db = db.query(FacultyProfile).filter(FacultyProfile.id == clean_id).first()
-    if not f_db:
-        f_db = db.query(FacultyProfile).filter(FacultyProfile.user_id == clean_id).first()
+    code = fac_dict.get("code") if fac_dict else None
+    name = (fac_dict.get("name") if fac_dict else (profile.name if profile else faculty_id)) or (profile.name if profile else faculty_id)
+    desig = profile.designation if profile and profile.designation else (fac_dict.get("designation") if fac_dict else "Faculty Member")
+    dept = profile.department if profile and profile.department else (fac_dict.get("department") if fac_dict else "Centre for Artificial Intelligence")
 
-    # 2. Try lookup in FACULTIES dictionary
-    fac_dict = resolve_faculty(clean_id)
-    if not fac_dict and clean_id.startswith("cai-"):
-        code_part = clean_id.replace("cai-", "").upper()
-        fac_dict = get_faculty_by_code(code_part)
-
-    if not f_db and not fac_dict:
-        raise HTTPException(status_code=404, detail="Faculty profile not found.")
-
-    if fac_dict:
-        code = fac_dict["code"]
-        name = fac_dict["name"]
-        desig = fac_dict.get("designation", "Assistant Professor")
-        dept = fac_dict.get("department", "Centre for Artificial Intelligence")
-        
-        # If DB record matches by name, pass it for enriched metadata
-        if not f_db:
-            f_db = db.query(FacultyProfile).filter(FacultyProfile.name.ilike(f"%{name}%")).first()
-
-        return _build_unified_faculty_item(
-            code=code,
-            name=name,
-            designation=desig,
-            department=dept,
-            db_profile=f_db,
-            viewer=current_user,
-            include_timetable=True
-        )
-
-    # Database-only faculty (e.g. CSE or IoT)
     return _build_unified_faculty_item(
-        code=None,
-        name=f_db.name,
-        designation=f_db.designation,
-        department=f_db.department,
-        centre=f_db.centre,
-        qualification=f_db.qualification,
-        db_profile=f_db,
+        code=code,
+        name=name,
+        designation=desig,
+        department=dept,
+        centre=profile.centre if profile else None,
+        qualification=profile.qualification if profile else None,
+        db_profile=profile,
         viewer=current_user,
         include_timetable=True
     )
@@ -512,7 +621,7 @@ async def upload_faculty_photo(
     """
     Super Admin & Faculty Image Management:
     Accepts JPG, JPEG, PNG, WEBP files (<= 5MB).
-    Sanitizes, saves to backend storage, updates FacultyProfile.photo_url,
+    Sanitizes, saves to backend storage, updates FacultyProfile.photo_url in PostgreSQL,
     and immediately broadcasts update for live synchronization.
     """
     user_roles = [ur.role.name for ur in current_user.roles if ur.role]
@@ -564,44 +673,27 @@ async def upload_faculty_photo(
     photo_url = f"/api/v1/faculty/photo/file/{safe_name}"
 
     # 5. Persist to DB FacultyProfile
-    profile = db.query(FacultyProfile).filter(FacultyProfile.id == faculty_id).first()
+    profile = _find_or_create_faculty_profile(faculty_id, db)
     if not profile:
-        profile = db.query(FacultyProfile).filter(FacultyProfile.user_id == faculty_id).first()
-    
-    # If not found by ID, attempt resolution from FACULTIES dictionary
-    if not profile:
-        resolved = resolve_faculty(faculty_id)
-        if resolved:
-            profile = db.query(FacultyProfile).filter(FacultyProfile.name == resolved["name"]).first()
-            if not profile:
-                # Create permanent DB record for this faculty member
-                profile = FacultyProfile(
-                    name=resolved["name"],
-                    designation=resolved.get("designation", "Assistant Professor"),
-                    department=resolved.get("department", "Centre for Artificial Intelligence"),
-                    photo_url=photo_url,
-                    email_public=f"{resolved['code'].lower()}@mitsgwalior.in",
-                    office_location="Centre for Artificial Intelligence, Academic Block",
-                    verification_status="VERIFIED_OFFICIAL_SOURCE",
-                    is_demo=False
-                )
-                db.add(profile)
-                db.flush()
+        raise HTTPException(status_code=404, detail=f"Faculty record '{faculty_id}' could not be located or created.")
 
-    if profile:
-        # Check permissions: Admin or owner
-        if not is_admin and profile.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Forbidden: You are not authorized to modify this faculty image.")
-        profile.photo_url = photo_url
-        if profile.user:
-            profile.user.picture_url = photo_url
-        db.commit()
+    # Check permissions: Admin or owner
+    if not is_admin and profile.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden: You are not authorized to modify this faculty image.")
+
+    profile.photo_url = photo_url
+    if profile.user:
+        profile.user.picture_url = photo_url
+    db.commit()
+    db.refresh(profile)
 
     # 6. Broadcast real-time update
     realtime_manager.broadcast_event(
         event_type="faculty_photo_updated",
         data={
-            "facultyId": faculty_id,
+            "facultyId": profile.id,
+            "code": getattr(profile, "code", faculty_id),
+            "name": profile.name,
             "photoUrl": photo_url,
             "updatedAt": datetime.now(timezone.utc).isoformat()
         }
@@ -610,6 +702,8 @@ async def upload_faculty_photo(
     return {
         "status": "SUCCESS",
         "photoUrl": photo_url,
+        "facultyId": profile.id,
+        "name": profile.name,
         "message": "Faculty profile photo uploaded and synchronized successfully."
     }
 
@@ -624,14 +718,7 @@ def delete_faculty_photo(
     user_roles = [ur.role.name for ur in current_user.roles if ur.role]
     is_admin = "SUPER_ADMIN" in user_roles
 
-    profile = db.query(FacultyProfile).filter(FacultyProfile.id == faculty_id).first()
-    if not profile:
-        profile = db.query(FacultyProfile).filter(FacultyProfile.user_id == faculty_id).first()
-    if not profile:
-        resolved = resolve_faculty(faculty_id)
-        if resolved:
-            profile = db.query(FacultyProfile).filter(FacultyProfile.name == resolved["name"]).first()
-
+    profile = _find_or_create_faculty_profile(faculty_id, db)
     if profile:
         if not is_admin and profile.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Forbidden.")
