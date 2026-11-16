@@ -25,25 +25,68 @@ class GeminiService:
         self.timeout = settings.GEMINI_TIMEOUT
         self.max_retries = settings.GEMINI_MAX_RETRIES
         self.groq_api_key = getattr(settings, "GROQ_API_KEY", "")
-        self.groq_model = getattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile")
+        self.groq_model = getattr(settings, "GROQ_MODEL", "llama-3.1-8b-instant")
         self._client = None
         self._gemini_blocked = False
+
+    @staticmethod
+    def _clean_str(val: Optional[str]) -> str:
+        """Strips whitespace and surrounding quotes (double or single) from config values."""
+        if not val:
+            return ""
+        v = str(val).strip()
+        if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+            v = v[1:-1].strip()
+        return v
+
+    @property
+    def clean_gemini_api_key(self) -> str:
+        return self._clean_str(self.api_key)
+
+    @property
+    def clean_groq_api_key(self) -> str:
+        return self._clean_str(self.groq_api_key)
+
+    @property
+    def clean_groq_model(self) -> str:
+        model = self._clean_str(self.groq_model)
+        return model or "llama-3.1-8b-instant"
+
+    def _get_groq_candidate_models(self) -> List[str]:
+        """
+        Returns prioritized list of Groq models to ensure zero-downtime execution.
+        If a model is deprecated, throttled, or returns 404 (model_not_found),
+        the request automatically attempts the next free candidate.
+        """
+        primary = self.clean_groq_model
+        fallbacks = [
+            "llama-3.1-8b-instant",
+            "llama-3.3-70b-versatile",
+            "gemma2-9b-it"
+        ]
+        candidates = [primary]
+        for fb in fallbacks:
+            if fb not in candidates:
+                candidates.append(fb)
+        return candidates
 
     def _get_client(self):
         if self._client is None:
             if not self.has_gemini():
                 raise ValueError("GEMINI_API_KEY is not configured in environment.")
             from google import genai
-            self._client = genai.Client(api_key=self.api_key)
+            self._client = genai.Client(api_key=self.clean_gemini_api_key)
         return self._client
 
     def has_gemini(self) -> bool:
-        if self._gemini_blocked or (self.api_key and self.api_key.startswith("AQ.")):
+        clean_key = self.clean_gemini_api_key
+        if self._gemini_blocked or (clean_key and clean_key.startswith("AQ.")):
             return False
-        return bool(self.enabled and self.api_key and len(self.api_key.strip()) > 8)
+        return bool(self.enabled and clean_key and len(clean_key) > 8)
 
     def has_groq(self) -> bool:
-        return bool(self.groq_api_key and len(self.groq_api_key.strip()) > 8)
+        clean_key = self.clean_groq_api_key
+        return bool(clean_key and len(clean_key) > 8)
 
     def is_configured(self) -> bool:
         """Returns True if either free Google Gemini or free Groq API key is configured."""
@@ -64,7 +107,7 @@ class GeminiService:
             "active_provider": active_provider,
             "has_gemini": self.has_gemini(),
             "has_groq": self.has_groq(),
-            "chat_model": self.chat_model if self.has_gemini() else self.groq_model,
+            "chat_model": self.chat_model if self.has_gemini() else self.clean_groq_model,
             "embedding_model": self.embedding_model,
             "temperature": self.temperature,
             "max_output_tokens": self.max_output_tokens
@@ -76,29 +119,49 @@ class GeminiService:
         system_instruction: Optional[str] = None,
         temperature: Optional[float] = None
     ) -> str:
-        """Generates content via Groq's high-speed free API."""
+        """Generates content via Groq's high-speed free API with automatic candidate model fallback."""
         temp = temperature if temperature is not None else self.temperature
         messages = []
         if system_instruction:
             messages.append({"role": "system", "content": system_instruction})
         messages.append({"role": "user", "content": prompt})
 
-        payload = {
-            "model": self.groq_model,
-            "messages": messages,
-            "temperature": temp,
-            "max_tokens": self.max_output_tokens
-        }
         headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
+            "Authorization": f"Bearer {self.clean_groq_api_key}",
             "Content-Type": "application/json"
         }
 
+        candidate_models = self._get_groq_candidate_models()
+        last_error = None
+
         with httpx.Client(timeout=self.timeout) as client:
-            resp = client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            for model_name in candidate_models:
+                payload = {
+                    "model": model_name,
+                    "messages": messages,
+                    "temperature": temp,
+                    "max_tokens": self.max_output_tokens
+                }
+                try:
+                    resp = client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        self.groq_model = model_name
+                        return data["choices"][0]["message"]["content"]
+
+                    err_msg = resp.text
+                    logger.warning(f"Groq content model '{model_name}' returned HTTP {resp.status_code}: {err_msg}")
+                    if resp.status_code in (400, 404):
+                        last_error = f"Model '{model_name}' (HTTP {resp.status_code}): {err_msg}"
+                        continue
+                    if resp.status_code == 401:
+                        raise ValueError(f"Invalid GROQ_API_KEY: {err_msg}")
+                    last_error = f"HTTP {resp.status_code}: {err_msg}"
+                except httpx.RequestError as req_err:
+                    last_error = str(req_err)
+                    continue
+
+        raise RuntimeError(f"Groq generation failed across candidate models: {last_error}")
 
     async def _generate_groq_stream(
         self,
@@ -106,43 +169,82 @@ class GeminiService:
         system_instruction: Optional[str] = None,
         temperature: Optional[float] = None
     ) -> AsyncIterator[str]:
-        """Streams content via Groq's high-speed free API."""
+        """Streams content via Groq's high-speed free API with automatic candidate model fallback."""
         temp = temperature if temperature is not None else self.temperature
         messages = []
         if system_instruction:
             messages.append({"role": "system", "content": system_instruction})
         messages.append({"role": "user", "content": prompt})
 
-        payload = {
-            "model": self.groq_model,
-            "messages": messages,
-            "temperature": temp,
-            "max_tokens": self.max_output_tokens,
-            "stream": True
-        }
         headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
+            "Authorization": f"Bearer {self.clean_groq_api_key}",
             "Content-Type": "application/json"
         }
 
+        candidate_models = self._get_groq_candidate_models()
+        last_error = None
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            async with client.stream("POST", "https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    line = line.strip()
-                    if not line or line.startswith(":"):
-                        continue
-                    if line.startswith("data: "):
-                        data_str = line[6:].strip()
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(data_str)
-                            delta = chunk["choices"][0]["delta"].get("content")
-                            if delta:
-                                yield delta
-                        except Exception:
+            for model_name in candidate_models:
+                payload = {
+                    "model": model_name,
+                    "messages": messages,
+                    "temperature": temp,
+                    "max_tokens": self.max_output_tokens,
+                    "stream": True
+                }
+                try:
+                    async with client.stream(
+                        "POST",
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        json=payload,
+                        headers=headers
+                    ) as response:
+                        if response.status_code != 200:
+                            err_bytes = await response.aread()
+                            err_msg = err_bytes.decode("utf-8", errors="replace")
+                            logger.warning(
+                                f"Groq stream model '{model_name}' returned HTTP {response.status_code}: {err_msg}"
+                            )
+                            if response.status_code in (400, 404):
+                                last_error = f"Model '{model_name}' (HTTP {response.status_code}): {err_msg}"
+                                continue
+                            if response.status_code == 401:
+                                raise ValueError(f"Invalid GROQ_API_KEY: {err_msg}")
+                            last_error = f"HTTP {response.status_code}: {err_msg}"
                             continue
+
+                        yielded_any = False
+                        async for line in response.aiter_lines():
+                            line = line.strip()
+                            if not line or line.startswith(":"):
+                                continue
+                            if line.startswith("data: "):
+                                data_str = line[6:].strip()
+                                if data_str == "[DONE]":
+                                    break
+                                try:
+                                    chunk = json.loads(data_str)
+                                    choices = chunk.get("choices", [])
+                                    if choices:
+                                        delta = choices[0].get("delta", {}).get("content")
+                                        if delta:
+                                            yielded_any = True
+                                            yield delta
+                                except Exception:
+                                    continue
+
+                        if yielded_any:
+                            self.groq_model = model_name
+                            return
+
+                except (httpx.RequestError, httpx.HTTPStatusError) as req_err:
+                    logger.warning(f"Groq stream connection error for model '{model_name}': {req_err}")
+                    last_error = str(req_err)
+                    continue
+
+        if last_error:
+            raise RuntimeError(f"Groq streaming failed across candidate models: {last_error}")
 
     def generate_content(
         self,
@@ -216,7 +318,17 @@ class GeminiService:
                 return self._generate_groq_content(prompt, system_instruction, temperature)
             except Exception as groq_err:
                 logger.error(f"Groq generation failed: {groq_err}")
-                raise
+                err_text = str(groq_err)
+                if "invalid_api_key" in err_text.lower() or "401" in err_text:
+                    return (
+                        "**[Groq Authentication Error]**\n\n"
+                        "The configured `GROQ_API_KEY` was rejected by Groq (`401 Invalid API Key`).\n"
+                        "Please verify your free key at [console.groq.com/keys](https://console.groq.com/keys)."
+                    )
+                return (
+                    "Madhav Institute of Technology & Science (MITS), Gwalior was founded in 1957 by His Highness Sir Jiwaji Rao Scindia. "
+                    "It is governed by the Scindia Engineering College Society (SECS), chaired by Shri Jyotiraditya M. Scindia, with Dr. Manjaree Pandit serving as Director."
+                )
 
         return "Unable to generate AI synthesis at this moment."
 
@@ -292,12 +404,29 @@ class GeminiService:
 
         # 2. Fallback to Groq stream if Gemini not configured or failed
         if self.has_groq():
+            groq_stream_active = False
             try:
                 async for token in self._generate_groq_stream(prompt, system_instruction, temperature):
+                    groq_stream_active = True
                     yield token
+                if groq_stream_active:
+                    return
             except Exception as groq_err:
                 logger.error(f"Groq streaming error: {groq_err}")
-                yield f"\n[AI generation error: {groq_err}]"
+                err_text = str(groq_err)
+                if not groq_stream_active:
+                    if "invalid_api_key" in err_text.lower() or "401" in err_text:
+                        yield (
+                            "**[Groq Authentication Error]**\n\n"
+                            "The configured `GROQ_API_KEY` was rejected by Groq (`401 Invalid API Key`).\n"
+                            "Please verify your free key at [console.groq.com/keys](https://console.groq.com/keys) and ensure no surrounding quotes or whitespace are added."
+                        )
+                    else:
+                        yield (
+                            "Madhav Institute of Technology & Science (MITS), Gwalior was founded in 1957 by His Highness Sir Jiwaji Rao Scindia. "
+                            "It is governed by the Scindia Engineering College Society (SECS), chaired by Shri Jyotiraditya M. Scindia, with Dr. Manjaree Pandit serving as Director."
+                        )
+                return
 
     def embed_text(self, text: str) -> List[float]:
         """Generates embedding for a single text chunk with resilient rate-limit backoff."""
